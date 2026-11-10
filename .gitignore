@@ -1,0 +1,26 @@
+# Entornos
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secretos y datos locales
+.env
+data/
+
+# Frontend (F3)
+node_modules/
+.next/
+out/
+
+# Sistema
+.DS_Store
+Thumbs.db

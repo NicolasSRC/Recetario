@@ -1,0 +1,6 @@
+[0.0s-3.4s] Today we're making a simple garlic pasta.
+[3.4s-7.1s] You need two hundred grams of spaghetti.
+[7.1s-11.0s] Four cloves of garlic, thinly sliced.
+[11.0s-15.2s] Three tablespoons of olive oil and a pinch of chili flakes.
+[15.2s-20.0s] Boil the pasta for eight minutes.
+[20.0s-25.5s] Sauté the garlic in the oil, add the pasta and toss with parsley.

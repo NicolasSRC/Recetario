@@ -1,0 +1,7 @@
+[1.0s] INGREDIENTES
+[2.0s] 200 g spaghetti
+[3.0s] 4 dientes de ajo
+[4.0s] 3 cucharadas de aceite de oliva
+[5.0s] PASOS
+[6.0s] Hervir 8 minutos
+[8.0s] Sofreír el ajo y mezclar
