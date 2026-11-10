@@ -19,13 +19,13 @@
 | Fase | Alcance | Estado | Criterio de aceptación | Verificación |
 | --- | --- | --- | --- | --- |
 | **F1** | MVP sin interfaz: URL/texto → receta JSON validada por CLI | 🟡 **En curso** | 10 de 15 videos producen JSON válido | Código y pruebas listos; falta ejecutar con LLM real y 15 videos |
-| **F2** | Persistencia y API REST | ⬜ Pendiente | OpenAPI publicado, integración en verde, reprocesar no duplica | — |
+| **F2** | Persistencia y API REST | 🟡 **En curso** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD de recetas y exportación listos; faltan jobs y Alembic |
 | **F3** | Frontend: lista, detalle, edición, aprobación, exportación | ⬜ Pendiente | Flujo e2e completo en CI | — |
 | **F4** | Frames y agente con herramientas | ⬜ Pendiente | Mejora medible frente a F1 en videos con texto en pantalla | — |
 | **F5** | Cola, reintentos y despliegue | ⬜ Pendiente | `docker compose up` levanta todo y CI en verde | — |
 | **F6** | Evals, búsqueda semántica y MCP | ⬜ Pendiente | Reporte de evals en README, búsqueda por significado, MCP con 3 herramientas | — |
 
-**Avance global estimado:** 1 de 6 fases (≈ 17 %), con la base técnica de F1 terminada.
+**Avance global estimado:** F1 completo en código y F2 a la mitad (≈ 25 %).
 
 ---
 
@@ -91,29 +91,43 @@ cd ..
 
 ---
 
-## 3. F2 · Persistencia y API ⬜
+## 3. F2 · Persistencia y API 🟡
 
 **Objetivo:** que la receta deje de ser un archivo JSON y pase a vivir en una API
 con base de datos, estados de trabajo e idempotencia.
 
-### Tareas
+### 3.1 Completado
 
-1. Modelos SQLAlchemy: `recipes`, `ingredients`, `steps`, `tags`, `recipe_tags`,
-   `sources`, `jobs`, `job_events`.
-2. Alembic: inicialización y primera migración.
-3. Índice único en `sources.url_canonical` → idempotencia (RP-02).
-4. Endpoints de la sección 6 del documento de requerimientos.
-5. `POST /api/v1/jobs` responde **202** con `job_id` y procesa en segundo plano.
-6. Exportación JSON-LD (schema.org/Recipe), Markdown y PDF (RF-40).
-7. Exportación completa del recetario (RF-41).
-8. OpenAPI documentado y publicado.
-9. Pruebas de integración: API + base de datos, idempotencia y reintentos.
+| Área | Entregable | Estado |
+| --- | --- | --- |
+| Base de datos | SQLite con SQLAlchemy 2.0: `sources`, `recipes`, `ingredients`, `steps`, `tags`, `recipe_tags`, `jobs`, `job_events` | ✅ |
+| Repositorio | Conversión dominio ↔ filas, guardado idempotente por URL (RP-02) | ✅ |
+| API de recetas | `POST`, `GET` (lista y detalle), `PATCH`, `DELETE` | ✅ |
+| Alta manual | `POST /api/v1/recipes` sin video, para el libro de F3 | ✅ |
+| Edición | `PATCH` de título, ingredientes, pasos, etiquetas y estado | ✅ |
+| Búsqueda | `GET /api/v1/recipes?q=` por título e ingrediente | ✅ |
+| Exportación | JSON-LD (schema.org/Recipe) y Markdown | ✅ |
+| OpenAPI | Generado automáticamente en `/docs` y `/openapi.json` | ✅ |
+| Pruebas | 15 tests de API (CRUD, búsqueda, exportación, duplicados, validación) | ✅ |
 
-### Entregables
+### 3.2 Pendiente
 
-- `backend/app/db/` con modelos y migraciones.
-- `backend/app/api/` con routers versionados (`/api/v1`).
-- Tests de integración en verde.
+| Tarea | Prioridad |
+| --- | --- |
+| Endpoints de trabajos: `POST /jobs`, `GET /jobs/{id}`, `retry`, `cancel` | Alta |
+| Procesamiento en segundo plano de la ingesta por URL | Alta |
+| Migraciones con Alembic | Media |
+| Exportación a PDF | Media |
+| Pruebas de integración con Postgres | Media |
+
+### 3.3 Cómo probarla
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m uvicorn app.asgi:app --reload
+```
+
+Documentación interactiva en <http://127.0.0.1:8000/docs>.
 
 ### Criterio de aceptación
 
@@ -122,8 +136,8 @@ duplica recetas.
 
 ### Dependencias
 
-- Decidir Postgres vs SQLite para el MVP (recomendado: SQLite hasta F5).
-- F1 cerrado o al menos estable.
+- **Resuelto:** SQLite hasta F5, migración a Postgres en el despliegue.
+- F1 estable.
 
 ---
 
@@ -283,14 +297,12 @@ tres herramientas.
 
 ## 9. Próximos pasos inmediatos
 
-1. **Crear `.env`** con `RECETARIO_LLM_API_KEY` y ejecutar
-   `recetario ingest --caption-file fixtures/caption_01.txt` para probar el
-   adaptador real.
-2. **Reunir los 15 videos** de validación y anotar la receta esperada de cada
-   uno (esto alimenta directamente las evals de F6).
-3. **Cerrar F1**: 10/15 JSON válidos, `git init`, commit `v0.1.0`, ADR-001/002
-   y README mínimo.
-4. **Abrir F2** por la base de datos: modelos + Alembic + endpoint `POST /jobs`.
+1. **Cerrar F2**: endpoints de trabajos (`POST /jobs`, `GET /jobs/{id}`, `retry`,
+   `cancel`) y procesamiento en segundo plano.
+2. **Abrir F3**: maqueta del libro con datos de la API (una receta por página,
+   edición en línea y alta manual).
+3. **Validar F1** cuando la cuota del modelo se restablezca: 10/15 JSON válidos.
+4. **Reintentar la ingesta real** con `yt-dlp` + `faster-whisper` instalados.
 
 ---
 

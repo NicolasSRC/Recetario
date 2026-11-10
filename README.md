@@ -58,6 +58,19 @@ python -m app.cli ingest --caption-file fixtures\caption_01.txt --out receta.jso
 python -m app.cli ingest --url https://vm.tiktok.com/XXXX/
 ```
 
+### API
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m uvicorn app.asgi:app --reload
+```
+
+- Documentación interactiva: <http://127.0.0.1:8000/docs>
+- `GET /api/v1/recipes` · `POST /api/v1/recipes` · `PATCH /api/v1/recipes/{id}`
+- `GET /api/v1/recipes/{id}/export?format=jsonld|md`
+
+La base de datos es SQLite (`data/recetario.db`) y se crea sola al arrancar.
+
 ## Arquitectura
 
 ```

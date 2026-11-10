@@ -163,6 +163,7 @@ class RecipeDraft(BaseModel):
 class Recipe(RecipeDraft):
     """Receta completa: contenido + trazabilidad."""
 
+    id: str | None = Field(default=None, description="Identificador en la base de datos")
     schema_version: int = SCHEMA_VERSION
     source: Source
     extraction: Extraction = Field(default_factory=Extraction)

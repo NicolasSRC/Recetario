@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     max_validation_retries: int = 2
     max_cost_usd_per_video: float = 0.25
 
+    # Base de datos (F2)
+    database_url: str = "sqlite:///./data/recetario.db"
+
     # Transcripción
     whisper_model: str = "small"
     whisper_device: str = "cpu"
