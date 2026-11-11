@@ -6,16 +6,18 @@ guardar. La API solo crea la fila y lo lanza; aquí vive la lógica.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import shutil
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
+from sqlalchemy import delete
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.adapters.manual import build_metadata, parse_screen_text, parse_transcript
@@ -24,14 +26,17 @@ from app.adapters.whisper_transcriber import WhisperTranscriber
 from app.adapters.ytdlp_extractor import VideoDownloadError, YtDlpExtractor
 from app.config import ConfigError, Settings
 from app.db import repository
-from app.db.models import JobRow
-from app.domain.content import RecipeContext
+from app.db.models import JobEventRow, JobRow
+from app.domain.agent import AgentLimits, AgentTrace
+from app.domain.content import RecipeContext, ScreenTextResult, Transcript, VideoMetadata
 from app.domain.schemas import Recipe
 from app.domain.urls import InvalidUrlError, normalize_tiktok_url
 from app.domain.validation import BusinessRuleError, NotARecipeError
 from app.llm_factory import build_llm
+from app.pipeline.agent import AgentResult, AgentTools, RecipeAgent
 from app.pipeline.extract_recipe import ExtractionFailed, extract_recipe
 from app.ports.llm import RecipeLLM
+from app.vision_factory import build_video_screen_text_reader
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +55,7 @@ class JobStatus(StrEnum):
 class JobStage(StrEnum):
     DESCARGANDO = "descargando"
     TRANSCRIBIENDO = "transcribiendo"
+    LEYENDO_PANTALLA = "leyendo_pantalla"
     EXTRAYENDO = "extrayendo"
     GUARDANDO = "guardando"
 
@@ -135,6 +141,7 @@ def _finish(
     *,
     recipe: Recipe,
     duration_s: float,
+    cost_usd: float = 0.0,
 ) -> None:
     with session_factory() as session:
         job = session.get(JobRow, job_id)
@@ -146,6 +153,7 @@ def _finish(
         job.error_message = None
         job.recipe_id = recipe.id
         job.duration_s = duration_s
+        job.cost_usd = cost_usd
         session.commit()
 
 
@@ -155,6 +163,7 @@ def _fail(
     exc: BaseException,
     *,
     duration_s: float,
+    cost_usd: float = 0.0,
 ) -> None:
     code = classify_error(exc)
     with session_factory() as session:
@@ -166,6 +175,7 @@ def _fail(
         job.error_code = code.value
         job.error_message = error_message(exc)[:2000]
         job.duration_s = duration_s
+        job.cost_usd = cost_usd
         session.commit()
 
 
@@ -183,32 +193,100 @@ def _mark_cancelled(session_factory: SessionFactory, job_id: str) -> None:
 # Construcción del contexto
 
 
-async def _context_from_url(
+def _save_trace(
+    session_factory: SessionFactory,
+    job_id: str,
+    trace: AgentTrace | None,
+) -> None:
+    """Persiste las llamadas del agente en `job_events` (RA-04)."""
+    if trace is None:
+        return
+
+    with session_factory() as session:
+        session.execute(delete(JobEventRow).where(JobEventRow.job_id == job_id))
+        for call in trace.calls:
+            session.add(
+                JobEventRow(
+                    job_id=job_id,
+                    tool=call.tool,
+                    input={"step": call.step, **call.input},
+                    output={"text": call.output, "ok": call.ok, "error": call.error},
+                    duration_ms=round(call.duration_s * 1000),
+                    cost_usd=call.cost_usd,
+                )
+            )
+        session.commit()
+
+
+async def _run_url_agent(
     session_factory: SessionFactory,
     job_id: str,
     url: str,
     settings: Settings,
-) -> RecipeContext:
+    llm: RecipeLLM,
+    model: str,
+    trace: AgentTrace,
+    save_recipe: Callable[[Recipe], Awaitable[Recipe]],
+) -> AgentResult:
+    """Prepara las herramientas reales (yt-dlp, whisper, frames) y ejecuta el agente."""
     settings.tmp_dir.mkdir(parents=True, exist_ok=True)
     extractor = YtDlpExtractor(tmp_dir=settings.tmp_dir)
-
-    metadata = await extractor.get_metadata(url)
-    _set_stage(session_factory, job_id, JobStage.TRANSCRIBIENDO)
-
+    transcriber = WhisperTranscriber(
+        model_size=settings.whisper_model,
+        device=settings.whisper_device,
+        compute_type=settings.whisper_compute_type,
+    )
     work_dir = Path(tempfile.mkdtemp(prefix="recetario-", dir=settings.tmp_dir))
-    try:
-        audio_path = await extractor.download_audio(url, work_dir / "audio.m4a")
-        transcriber = WhisperTranscriber(
-            model_size=settings.whisper_model,
-            device=settings.whisper_device,
-            compute_type=settings.whisper_compute_type,
-        )
-        transcript = await transcriber.transcribe(audio_path)
-    finally:
-        # RF-14: el video y el audio temporales se borran al terminar.
-        shutil.rmtree(work_dir, ignore_errors=True)
 
-    return RecipeContext(metadata=metadata, transcript=transcript)
+    try:
+        screen_reader = build_video_screen_text_reader(settings)
+    except ConfigError as exc:
+        screen_reader = None
+        trace.decision(f"frames deshabilitados: {exc}")
+
+    async def get_metadata() -> VideoMetadata:
+        _set_stage(session_factory, job_id, JobStage.DESCARGANDO)
+        return await extractor.get_metadata(url)
+
+    async def transcribe_audio() -> Transcript:
+        _set_stage(session_factory, job_id, JobStage.TRANSCRIBIENDO)
+        audio_path = await extractor.download_audio(url, work_dir / "audio.m4a")
+        return await transcriber.transcribe(audio_path)
+
+    async def extract_frames() -> ScreenTextResult:
+        if screen_reader is None:
+            raise ConfigError("no hay lector de texto en pantalla configurado")
+        _set_stage(session_factory, job_id, JobStage.LEYENDO_PANTALLA)
+        video_path = await extractor.download_video(url, work_dir / "video.mp4")
+        return await screen_reader.read(video_path, work_dir / "frames")
+
+    tools = AgentTools(
+        get_metadata=get_metadata,
+        transcribe_audio=transcribe_audio,
+        extract_frames=extract_frames if screen_reader is not None else None,
+        save_recipe=save_recipe,
+        before_extract=lambda: _set_stage(session_factory, job_id, JobStage.EXTRAYENDO),
+    )
+    agent = RecipeAgent(
+        tools,
+        llm,
+        limits=AgentLimits(
+            max_steps=settings.max_agent_steps,
+            max_cost_usd=settings.max_cost_usd_per_video,
+        ),
+        trace=trace,
+        max_retries=settings.max_validation_retries,
+        model_name=model,
+        extraction_cost_usd=settings.llm_cost_usd_per_extraction,
+        frame_interval_s=settings.frame_interval_s,
+        fatal_exceptions=(JobCancelled,),
+    )
+
+    try:
+        return await agent.run()
+    finally:
+        # RF-14: el video, el audio y los frames temporales se borran al terminar.
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 
 def _context_from_text(job_id: str, payload: dict[str, Any]) -> RecipeContext:
@@ -240,6 +318,13 @@ async def process_job(
 ) -> None:
     """Ejecuta un trabajo de principio a fin. Nunca propaga errores del pipeline."""
     started = time.monotonic()
+    trace: AgentTrace | None = None
+
+    def save_recipe(recipe: Recipe) -> Recipe:
+        _set_stage(session_factory, job_id, JobStage.GUARDANDO)
+        with session_factory() as session:
+            saved, _created = repository.save_recipe(session, recipe)
+        return saved
 
     try:
         kind, source_url, payload = _load(session_factory, job_id)
@@ -249,36 +334,60 @@ async def process_job(
             JobStage.DESCARGANDO if kind == "url" else JobStage.EXTRAYENDO,
         )
 
+        llm, model = llm_factory(settings)
+
         if kind == "url":
             if not source_url:
                 raise InvalidUrlError("el trabajo no tiene URL de origen")
-            context = await _context_from_url(
-                session_factory, job_id, normalize_tiktok_url(source_url), settings
+            trace = AgentTrace(
+                limits=AgentLimits(
+                    max_steps=settings.max_agent_steps,
+                    max_cost_usd=settings.max_cost_usd_per_video,
+                )
             )
-            _set_stage(session_factory, job_id, JobStage.EXTRAYENDO)
+
+            async def save_async(recipe: Recipe) -> Recipe:
+                return await asyncio.to_thread(save_recipe, recipe)
+
+            result = await _run_url_agent(
+                session_factory,
+                job_id,
+                normalize_tiktok_url(source_url),
+                settings,
+                llm,
+                model,
+                trace,
+                save_async,
+            )
+            recipe = result.recipe
         else:
             context = _context_from_text(job_id, payload)
+            recipe = await extract_recipe(
+                context,
+                llm,
+                max_retries=settings.max_validation_retries,
+                model_name=model,
+            )
+            recipe = await asyncio.to_thread(save_recipe, recipe)
 
-        llm, model = llm_factory(settings)
-        recipe = await extract_recipe(
-            context,
-            llm,
-            max_retries=settings.max_validation_retries,
-            model_name=model,
-        )
-
-        _set_stage(session_factory, job_id, JobStage.GUARDANDO)
-        with session_factory() as session:
-            saved, _created = repository.save_recipe(session, recipe)
-
+        _save_trace(session_factory, job_id, trace)
         _finish(
             session_factory,
             job_id,
-            recipe=saved,
+            recipe=recipe,
             duration_s=time.monotonic() - started,
+            cost_usd=trace.total_cost_usd if trace else 0.0,
         )
     except JobCancelled:
+        _save_trace(session_factory, job_id, trace)
         _mark_cancelled(session_factory, job_id)
     except Exception as exc:  # el pipeline falla de muchas formas posibles
         logger.warning("trabajo %s falló: %s", job_id, exc, exc_info=True)
-        _fail(session_factory, job_id, exc, duration_s=time.monotonic() - started)
+        _save_trace(session_factory, job_id, trace)
+        _fail(
+            session_factory,
+            job_id,
+            exc,
+            duration_s=time.monotonic() - started,
+            cost_usd=trace.total_cost_usd if trace else 0.0,
+        )

@@ -158,8 +158,21 @@ class JobRow(Base):
         DateTime(timezone=True), default=_now, onupdate=_now
     )
 
+    events: Mapped[list[JobEventRow]] = relationship(
+        back_populates="job",
+        cascade="all, delete-orphan",
+        order_by="JobEventRow.id",
+        lazy="selectin",
+    )
+
 
 class JobEventRow(Base):
+    """Registro de cada herramienta del agente (RA-04).
+
+    `input` lleva el paso y `output` el texto, el resultado y el error: así la
+    tabla que ya existía en F2 sirve sin migración.
+    """
+
     __tablename__ = "job_events"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -170,3 +183,5 @@ class JobEventRow(Base):
     duration_ms: Mapped[int | None]
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    job: Mapped[JobRow] = relationship(back_populates="events")

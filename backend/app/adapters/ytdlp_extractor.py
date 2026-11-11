@@ -52,6 +52,11 @@ class YtDlpExtractor:
         normalized = normalize_tiktok_url(url)
         return await asyncio.to_thread(self._download_audio_sync, normalized, dest)
 
+    async def download_video(self, url: str, dest: Path) -> Path:
+        """Descarga el video completo solo cuando el agente pide frames (F4)."""
+        normalized = normalize_tiktok_url(url)
+        return await asyncio.to_thread(self._download_video_sync, normalized, dest)
+
     # ------------------------------------------------------------------ #
 
     def _get_metadata_sync(self, url: str) -> VideoMetadata:
@@ -108,6 +113,35 @@ class YtDlpExtractor:
         )
         if not candidates:
             raise VideoDownloadError(f"yt-dlp no generó ningún audio para {url}")
+
+        return candidates[0]
+
+    def _download_video_sync(self, url: str, dest: Path) -> Path:
+        _assert_public_host(url)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        self._tmp_dir.mkdir(parents=True, exist_ok=True)
+
+        output_template = f"{dest.with_suffix('')}.%(ext)s"
+        self._run_ydl(
+            url,
+            {
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "format": "bv*+ba/b",
+                "merge_output_format": "mp4",
+                "outtmpl": output_template,
+            },
+            download=True,
+        )
+
+        candidates = sorted(
+            path
+            for path in dest.parent.glob(f"{dest.stem}.*")
+            if path.suffix.lower() in {".mp4", ".mkv", ".webm", ".mov"}
+        )
+        if not candidates:
+            raise VideoDownloadError(f"yt-dlp no generó ningún video para {url}")
 
         return candidates[0]
 

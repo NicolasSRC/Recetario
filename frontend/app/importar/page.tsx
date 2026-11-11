@@ -25,6 +25,11 @@ const stages: { key: JobStage; label: string; hint: string }[] = [
     hint: "faster-whisper, en tu equipo.",
   },
   {
+    key: "leyendo_pantalla",
+    label: "Leer el texto en pantalla",
+    hint: "Solo si faltan datos: frames con ffmpeg y OCR o visión.",
+  },
+  {
     key: "extrayendo",
     label: "Extraer la receta",
     hint: "El modelo ordena ingredientes y pasos.",
@@ -35,6 +40,17 @@ const stages: { key: JobStage; label: string; hint: string }[] = [
     hint: "La receta entra en el recetario.",
   },
 ];
+
+const toolLabels: Record<string, string> = {
+  get_metadata: "Leer metadatos",
+  transcribe_audio: "Transcribir el audio",
+  extract_frames: "Leer el texto en pantalla",
+  extract_recipe: "Extraer la receta",
+  validate_recipe: "Validar la receta",
+  save_recipe: "Guardar la receta",
+  ask_user: "Preguntar al usuario",
+  decision: "Decisión del agente",
+};
 
 const errorText: Record<string, string> = {
   url_invalida: "El enlace no parece ser de TikTok.",
@@ -168,7 +184,14 @@ export default function ImportPage() {
   }
 
   const visibleStages =
-    job?.kind === "texto" ? stages.filter((s) => s.key !== "descargando" && s.key !== "transcribiendo") : stages;
+    job?.kind === "texto"
+      ? stages.filter(
+          (s) =>
+            s.key !== "descargando" &&
+            s.key !== "transcribiendo" &&
+            s.key !== "leyendo_pantalla",
+        )
+      : stages;
   const currentStage = job?.stage
     ? visibleStages.findIndex((stage) => stage.key === job.stage)
     : -1;
@@ -496,6 +519,44 @@ export default function ImportPage() {
                   </div>
                 </div>
               )}
+
+              {job.events.length > 0 ? (
+                <details className="mt-6 rounded-lg border border-ink-soft/15 bg-paper-2/60 p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-ink">
+                    Qué hizo el agente
+                    <span className="ml-2 text-xs font-normal text-ink-soft">
+                      {job.events.filter((event) => event.tool !== "decision").length}{" "}
+                      llamadas · ${job.cost_usd.toFixed(4)}
+                    </span>
+                  </summary>
+                  <ol className="mt-3 space-y-2">
+                    {job.events.map((event, index) => (
+                      <li
+                        key={`${event.tool}-${index}`}
+                        className="border-l-2 border-ink-soft/20 pl-3 text-xs text-ink-soft"
+                      >
+                        <p className="font-medium text-ink">
+                          {toolLabels[event.tool] ?? event.tool}
+                          {event.tool !== "decision" ? (
+                            <span className="ml-2 font-normal text-ink-soft/70">
+                              {event.duration_ms ?? 0} ms
+                            </span>
+                          ) : null}
+                          {!event.ok ? (
+                            <span className="ml-2 font-normal text-wine">
+                              falló
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-0.5 break-words">
+                          {event.text}
+                          {event.error ? ` · ${event.error}` : ""}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ) : null}
 
               {error ? (
                 <p

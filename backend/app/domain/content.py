@@ -10,6 +10,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.domain.schemas import Evidence
 
@@ -38,6 +39,23 @@ class Transcript:
 class ScreenText:
     timestamp_s: float
     text: str
+
+
+@dataclass(frozen=True, slots=True)
+class Frame:
+    """Un fotograma extraído del video, listo para OCR o visión (RF-12)."""
+
+    path: Path
+    timestamp_s: float
+
+
+@dataclass(frozen=True, slots=True)
+class ScreenTextResult:
+    """Texto leído en los frames, con cuántos se analizaron y su costo."""
+
+    items: tuple[ScreenText, ...] = ()
+    frames_analyzed: int = 0
+    cost_usd: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

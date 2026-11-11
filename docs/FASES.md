@@ -1,6 +1,6 @@
 # Fases del proyecto — estado de avance
 
-> Documento vivo. Última actualización: **10 de noviembre de 2026**.
+> Documento vivo. Última actualización: **11 de noviembre de 2026**.
 > Referencia: `Recetario con IA Requerimientos del proyecto.md` (sección 7).
 
 ## Leyenda
@@ -19,14 +19,14 @@
 | Fase | Alcance | Estado | Criterio de aceptación | Verificación |
 | --- | --- | --- | --- | --- |
 | **F1** | MVP sin interfaz: URL/texto → receta JSON validada por CLI | 🟡 **En curso** | 10 de 15 videos producen JSON válido | Código y pruebas listos; falta ejecutar con LLM real y 15 videos |
-| **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 115 tests en verde |
-| **F3** | Frontend: libro, edición, aprobación, exportación | 🟡 **Casi completa** | Flujo e2e completo en CI | Libro verificado a mano en navegador; falta test e2e automatizado y PDF |
-| **F4** | Frames y agente con herramientas | ⬜ Pendiente | Mejora medible frente a F1 en videos con texto en pantalla | — |
+| **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 136 tests en verde |
+| **F3** | Frontend: libro, edición, aprobación, exportación | ✅ **Completada** | Flujo e2e completo en CI | E2E de Playwright (2 casos), PDF, CI de backend/frontend/e2e |
+| **F4** | Frames y agente con herramientas | 🟡 **En curso** | Mejora medible frente a F1 en videos con texto en pantalla | Frames, OCR/visión, agente, traza y eval implementados; falta medir con videos reales |
 | **F5** | Cola, reintentos y despliegue | ⬜ Pendiente | `docker compose up` levanta todo y CI en verde | — |
 | **F6** | Evals, búsqueda semántica y MCP | ⬜ Pendiente | Reporte de evals en README, búsqueda por significado, MCP con 3 herramientas | — |
 
-**Avance global estimado:** F1 completo en código, F2 cerrada y F3 usable de
-punta a punta (≈ 50 %).
+**Avance global estimado:** F1 completo en código, F2 y F3 cerradas, F4
+implementada y pendiente de validación con videos reales (≈ 65 %).
 
 ---
 
@@ -56,7 +56,7 @@ estructurada, validada y trazable — antes de añadir base de datos o interfaz.
 | Pipeline | `pipeline/extract_recipe.py`: LLM → ensamblado → validación con reintentos (RF-23) | ✅ |
 | CLI | `recetario parse` y `recetario ingest` (`--url`, archivos, `--dry-run`, `--out`) | ✅ |
 | Fixtures | 4 casos: caption completo, transcripción en inglés, texto en pantalla, no-receta | ✅ |
-| Pruebas | **115 tests** en total (dominio, adaptadores, API y trabajos), cobertura >90 % en dominio | ✅ |
+| Pruebas | **136 tests** en total (dominio, adaptadores, API, trabajos y agente), cobertura >90 % en dominio | ✅ |
 | Calidad | `ruff check`, `ruff format --check` y `mypy` limpios | ✅ |
 
 ### 2.2 Pendiente para cerrar F1
@@ -89,7 +89,7 @@ cd ..
 
 ---
 
-## 3. F2 · Persistencia y API 🟡
+## 3. F2 · Persistencia y API ✅
 
 **Objetivo:** que la receta deje de ser un archivo JSON y pase a vivir en una API
 con base de datos, estados de trabajo e idempotencia.
@@ -111,7 +111,7 @@ con base de datos, estados de trabajo e idempotencia.
 | Procesamiento | `ThreadJobRunner` en hilos daemon; sustituible por una cola real en F5 | ✅ |
 | CORS | Orígenes locales configurables (`cors_origins` + `cors_origin_regex`) | ✅ |
 | OpenAPI | Generado automáticamente en `/docs` y `/openapi.json` | ✅ |
-| Pruebas | 115 tests: CRUD, búsqueda, exportación, duplicados, validación, trabajos y clasificación de errores | ✅ |
+| Pruebas | 136 tests: CRUD, búsqueda, exportación, duplicados, validación, trabajos, agente y clasificación de errores | ✅ |
 
 ### 3.2 Pendiente (no bloquea el criterio de aceptación)
 
@@ -142,7 +142,7 @@ duplica recetas.
 
 ---
 
-## 4. F3 · Frontend 🟡
+## 4. F3 · Frontend ✅
 
 **Objetivo:** que el flujo completo se pueda usar sin consola, con una
 experiencia de **libro de recetas**: una receta por página.
@@ -187,18 +187,18 @@ experiencia de **libro de recetas**: una receta por página.
 | Alta manual | `/nueva`: receta sin video; entra aprobada y sin banner de revisión | ✅ |
 | Ingesta | `/importar`: URL de TikTok o texto pegado; polling cada 2 s y línea de etapas | ✅ |
 | Estados | Insignias `aprobada/por_revisar/descartada` y cinta de aviso con los flags del modelo | ✅ |
-| Acciones | Aprobar, borrar, imprimir (`window.print`), exportar JSON-LD y Markdown | ✅ |
+| Acciones | Aprobar, borrar, imprimir (`window.print`), exportar JSON-LD, Markdown y PDF | ✅ |
 | Responsive | Diseño de escritorio, tableta y móvil | ✅ |
 | Calidad | `npm run lint`, `npm run typecheck` y `npm run build` limpios | ✅ |
-| Verificación manual | Playwright + Edge: editar título e ingredientes, crear receta manual y verla en la estantería | ✅ |
+| E2E | Playwright sobre la app real: alta manual/edición/PDF/búsqueda e ingesta simulada con revisión y aprobación | ✅ |
+| CI | GitHub Actions: backend (ruff, mypy, pytest), frontend (lint, typecheck, build) y e2e (Chromium) | ✅ |
 
-### 4.2 Pendiente
+### 4.2 Pendiente (no bloquea el criterio de aceptación)
 
 | Tarea | Prioridad |
 | --- | --- |
-| Test e2e automatizado con Playwright en CI (hoy la verificación es manual) | Alta |
-| Exportación a PDF (se usa imprimir del navegador como sustituto) | Media |
 | Paginación real en la estantería cuando haya muchas recetas | Baja |
+| Revisión visual con datos reales (los e2e usan datos simulados) | Baja |
 
 ### 4.3 Cómo probarla
 
@@ -227,7 +227,7 @@ exportar) pasa en CI, y se puede crear una receta manual sin video.
 
 ---
 
-## 5. F4 · Frames y agente ⬜
+## 5. F4 · Frames y agente 🟡
 
 **Objetivo:** cubrir recetas que solo están en el texto en pantalla y demostrar
 un agente que decide qué fuentes usar.
@@ -244,13 +244,62 @@ un agente que decide qué fuentes usar.
 6. Registro de cada llamada: entrada, salida, duración y costo (RA-04).
 7. Comparar visión vs OCR con las evals de esta fase.
 
+### 5.1 Completado
+
+| Área | Entregable | Estado |
+| --- | --- | --- |
+| Dominio | `domain/agent.py`: límites, traza, heurísticas de caption, cantidades faltantes y calidad de receta | ✅ |
+| Contenido | `Frame` y `ScreenTextResult` en `domain/content.py` | ✅ |
+| Puertos | `FrameSampler`, `ScreenTextReader` y `ScreenTextExtractor` | ✅ |
+| Frames | `FFmpegFrameSampler` con intervalo, tope de frames y error claro si falta ffmpeg | ✅ |
+| OCR | `TesseractScreenTextReader` con umbral de confianza y aviso si falta el binario | ✅ |
+| Visión | `VisionScreenTextReader` sobre API compatible con OpenAI, con prompt anti-inyección | ✅ |
+| Selección | `vision_factory.py`: `RECETARIO_SCREEN_TEXT_READER=tesseract\|vision\|none` | ✅ |
+| Agente | `RecipeAgent` determinista: RA-01, RA-02, RA-03, RA-04 y RA-05; herramientas inyectables | ✅ |
+| Traza | Cada llamada se guarda en `job_events` (paso, entrada, salida, duración, costo, error) y se expone en `JobOut.events` | ✅ |
+| Trabajos | Etapa `leyendo_pantalla`, costo por trabajo y traza persistida también al fallar o cancelar | ✅ |
+| CLI | `ingest --url` usa el agente; `--no-frames` y `--interval`; comando `frames` para un video local | ✅ |
+| Eval | `python -m app.evals.screen_text`: F1 por palabras para comparar OCR y visión sobre los mismos frames | ✅ |
+| Frontend | Etapa «Leer el texto en pantalla» y panel «Qué hizo el agente» con duración, errores y costo | ✅ |
+| Pruebas | Agente (RA-01/02/03/04/05), frames, OCR, visión, traza en la API y métrica de la eval | ✅ |
+
+### 5.2 Pendiente para cerrar F4
+
+| Tarea | Por qué falta | Prioridad |
+| --- | --- | --- |
+| Medir OCR vs visión con videos reales | No hay Tesseract instalado ni llave de visión; faltan los videos anotados | Alta |
+| Ejecutar la ruta completa con TikTok real | La cuota del LLM gratuito está agotada y no hay URLs/videos locales en el repo | Alta |
+| Instalar `backend[ocr]` + binario de Tesseract | Dependencia opcional, no incluida en el entorno actual | Media |
+
+### 5.3 Cómo probarla
+
+```powershell
+# Frames de un video local (requiere ffmpeg y, para OCR, Tesseract + extra [ocr])
+cd backend
+..\.venv\Scripts\python.exe -m app.cli frames --video C:\ruta\video.mp4 --interval 2 --out frames.txt
+
+# Ingesta por URL con agente (sin frames, para aislar el resto)
+..\.venv\Scripts\python.exe -m app.cli ingest --url https://vm.tiktok.com/XXXX/ --no-frames
+
+# Comparar lectores sobre los mismos frames
+..\.venv\Scripts\python.exe -m app.evals.screen_text --video C:\ruta\video.mp4 --expected fixtures\screen_text_01.txt --readers tesseract,vision
+```
+
+Variables nuevas en `.env.example`: `RECETARIO_FRAMES_ENABLED`,
+`RECETARIO_FRAME_INTERVAL_S`, `RECETARIO_MAX_FRAMES_PER_VIDEO`,
+`RECETARIO_SCREEN_TEXT_READER`, `RECETARIO_TESSERACT_*`,
+`RECETARIO_VISION_*`, `RECETARIO_MAX_AGENT_STEPS` y
+`RECETARIO_LLM_COST_USD_PER_EXTRACTION`.
+
 ### Criterio de aceptación
 
 Mejora medible frente a F1 en los videos que solo traen texto en pantalla.
 
 ### Dependencias
 
-- F1 (pipeline) y decisión abierta sobre visión vs OCR.
+- F1 (pipeline) y F3 (panel de traza) terminadas.
+- Decisión visión vs OCR: **resuelto por configuración** (OCR local por
+  defecto, visión seleccionable); falta la medición comparativa.
 
 ---
 
@@ -339,13 +388,14 @@ tres herramientas.
 
 ## 9. Próximos pasos inmediatos
 
-1. **Validar F1** cuando la cuota del modelo se restablezca: 10/15 JSON válidos
+1. **Cerrar F4**: medir OCR vs visión con los 15 videos reales y la eval
+   `python -m app.evals.screen_text`.
+2. **Validar F1** cuando la cuota del modelo se restablezca: 10/15 JSON válidos
    con los videos reales.
-2. **Cerrar F3**: test e2e automatizado (Playwright) y exportación a PDF.
-3. **Probar la ingesta real** con `yt-dlp` + `faster-whisper` (extra `audio`).
-4. **Abrir F4**: muestreo de frames y agente que decide qué fuentes usar.
-5. **Preparar F5**: sustituir `ThreadJobRunner` por Celery/Redis y añadir
-   `docker compose` + CI.
+3. **Probar la ingesta real** con `yt-dlp` + `faster-whisper` (extra `audio`) y
+   la ruta de frames completa.
+4. **Preparar F5**: sustituir `ThreadJobRunner` por Celery/Redis, añadir
+   `docker compose` y migrar a Postgres.
 
 ---
 
@@ -355,7 +405,8 @@ tres herramientas.
 | --- | --- | --- |
 | Modelo de lenguaje y tope de costo | F1, F4, F6 | **Resuelto:** OpenCode local con `deepseek-v4.1-flash-free`; adaptador OpenAI como alternativa |
 | Postgres desde F2 o SQLite hasta F5 | F2, F5 | **Resuelto:** SQLite hasta F5 (`data/recetario.db`), sin Alembic todavía |
-| Visión vs OCR para texto en pantalla | F4 | Pendiente (se decide con evals) |
+| Visión vs OCR para texto en pantalla | F4 | **Resuelto por configuración:** OCR local por defecto, visión seleccionable con `RECETARIO_SCREEN_TEXT_READER`; falta la medición comparativa |
+| Política del agente | F4 | **Resuelto:** determinista y auditable (ADR-005), no un selector de herramientas por LLM |
 | Dónde se despliega la demo | F5 | Pendiente |
 | Repositorio público desde el inicio | F6 (dataset) | Pendiente |
 | Transcripción local vs API | F1 | **Resuelto:** local por defecto |

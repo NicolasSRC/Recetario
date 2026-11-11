@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 
 from app.adapters.opencode_llm import OpenCodeQuotaError
 from app.config import Settings
+from app.db.models import JobEventRow
+from app.domain.content import Transcript, VideoMetadata
 from app.domain.schemas import RecipeDraft
 from app.domain.validation import NotARecipeError
 from app.jobs.service import (
@@ -247,6 +249,83 @@ def test_etapas_definidas() -> None:
     assert [stage.value for stage in JobStage] == [
         "descargando",
         "transcribiendo",
+        "leyendo_pantalla",
         "extrayendo",
         "guardando",
     ]
+
+
+def test_procesar_trabajo_por_url_con_agente(
+    book: tuple[TestClient, Any, RecordingRunner, FakeLLM],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, app, _runner, _llm = book
+    job = _create(client, source_url="tiktok.com/@chef/video/1")
+
+    class FakeExtractor:
+        def __init__(self, **_kwargs: Any) -> None:
+            pass
+
+        async def get_metadata(self, url: str) -> VideoMetadata:
+            return VideoMetadata(url=url, caption="Pollo al limón en 25 minutos")
+
+        async def download_audio(self, _url: str, dest: Any) -> Any:
+            return dest
+
+        async def download_video(self, _url: str, dest: Any) -> Any:
+            return dest
+
+    class FakeTranscriber:
+        def __init__(self, **_kwargs: Any) -> None:
+            pass
+
+        async def transcribe(self, _path: Any) -> Transcript:
+            return Transcript(text="Marina el pollo y cocínalo a la plancha.")
+
+    monkeypatch.setattr("app.jobs.service.YtDlpExtractor", FakeExtractor)
+    monkeypatch.setattr("app.jobs.service.WhisperTranscriber", FakeTranscriber)
+
+    _run(app, job["id"])
+
+    body = client.get(f"/api/v1/jobs/{job['id']}").json()
+    assert body["status"] == JobStatus.LISTA
+    assert body["recipe_id"]
+    assert body["cost_usd"] == 0.0
+
+    tools = [event["tool"] for event in body["events"]]
+    assert tools[0] == "get_metadata"
+    assert "transcribe_audio" in tools
+    assert "extract_recipe" in tools
+    assert "validate_recipe" in tools
+    assert "save_recipe" in tools
+    assert "extract_frames" not in tools
+
+
+def test_trabajo_expone_las_llamadas_del_agente(
+    book: tuple[TestClient, Any, RecordingRunner, FakeLLM],
+) -> None:
+    client, app, _runner, _llm = book
+    job = _create(client, caption="una receta")
+
+    with app.state.session_factory() as session:
+        session.add(
+            JobEventRow(
+                job_id=job["id"],
+                tool="get_metadata",
+                input={"step": 1, "source": "url"},
+                output={"text": "caption de 10 caracteres", "ok": True, "error": None},
+                duration_ms=12,
+                cost_usd=0.0,
+            )
+        )
+        session.commit()
+
+    body = client.get(f"/api/v1/jobs/{job['id']}").json()
+
+    assert len(body["events"]) == 1
+    event = body["events"][0]
+    assert event["tool"] == "get_metadata"
+    assert event["step"] == 1
+    assert event["text"] == "caption de 10 caracteres"
+    assert event["ok"] is True
+    assert event["error"] is None

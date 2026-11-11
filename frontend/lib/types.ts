@@ -120,8 +120,21 @@ export type JobStatus =
 export type JobStage =
   | "descargando"
   | "transcribiendo"
+  | "leyendo_pantalla"
   | "extrayendo"
   | "guardando";
+
+export interface AgentEvent {
+  step: number;
+  tool: string;
+  input: Record<string, unknown> | null;
+  output: Record<string, unknown> | null;
+  text: string;
+  ok: boolean;
+  error: string | null;
+  duration_ms: number | null;
+  cost_usd: number;
+}
 
 export interface Job {
   id: string;
@@ -136,6 +149,7 @@ export interface Job {
   duration_s: number | null;
   created_at: string;
   updated_at: string;
+  events: AgentEvent[];
 }
 
 export interface JobCreateInput {
