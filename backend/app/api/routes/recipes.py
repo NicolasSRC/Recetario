@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session
-from app.api.export import to_jsonld, to_markdown
+from app.api.export import pdf_filename, to_jsonld, to_markdown, to_pdf
 from app.api.schemas import RecipeCreate, RecipePage, RecipeUpdate
 from app.db import repository
 from app.domain.schemas import Evidence, Extraction, Recipe, RecipeDraft, Source, Status
@@ -111,7 +111,7 @@ def delete_recipe(recipe_id: str, session: SessionDep) -> Response:
 def export_recipe(
     recipe_id: str,
     session: SessionDep,
-    format: Literal["jsonld", "md"] = "jsonld",
+    format: Literal["jsonld", "md", "pdf"] = "jsonld",
 ) -> Response:
     recipe = repository.get_recipe(session, recipe_id)
     if recipe is None:
@@ -119,5 +119,14 @@ def export_recipe(
 
     if format == "md":
         return PlainTextResponse(to_markdown(recipe), media_type="text/markdown; charset=utf-8")
+
+    if format == "pdf":
+        return Response(
+            content=to_pdf(recipe),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{pdf_filename(recipe)}"',
+            },
+        )
 
     return JSONResponse(to_jsonld(recipe))

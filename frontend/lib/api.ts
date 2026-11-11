@@ -132,7 +132,7 @@ export const api = {
     });
   },
 
-  exportUrl(id: string, format: "jsonld" | "md"): string {
+  exportUrl(id: string, format: "jsonld" | "md" | "pdf"): string {
     return `${API_URL}/api/v1/recipes/${encodeURIComponent(id)}/export?format=${format}`;
   },
 };

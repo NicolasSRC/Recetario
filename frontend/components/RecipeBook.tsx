@@ -352,6 +352,14 @@ export function RecipeBook({ recipeId }: { recipeId: string }) {
             <span className="hidden sm:inline">Markdown</span>
           </a>
 
+          <a
+            href={api.exportUrl(recipeId, "pdf")}
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-sm text-paper/80 transition hover:border-white/35 hover:text-paper"
+          >
+            <DownloadIcon width={16} height={16} />
+            <span className="hidden sm:inline">PDF</span>
+          </a>
+
           <button
             type="button"
             onClick={() => void handleDelete()}

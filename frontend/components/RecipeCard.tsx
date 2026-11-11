@@ -22,6 +22,7 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
   return (
     <Link
       href={`/recetas/${recipe.id ?? ""}`}
+      aria-label={`Abrir la receta ${recipe.title}`}
       className="group relative flex h-full overflow-hidden rounded-r-xl rounded-l-md shadow-card outline-none transition duration-200 hover:-translate-y-1 hover:shadow-book focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-desk"
     >
       <span

@@ -252,6 +252,13 @@ def update_recipe(
     updated = validate_recipe(Recipe.model_validate(data))
     if status is not None:
         updated.status = status
+    elif current.status is not Status.POR_REVISAR:
+        # Editar una receta ya aprobada (o descartada) no la devuelve a revisión:
+        # el usuario sigue siendo la fuente. Solo las que estaban pendientes
+        # vuelven a calcular su estado con la validación.
+        updated.status = current.status
+
+    updated.extraction.needs_review = updated.status is Status.POR_REVISAR
 
     _apply_recipe(session, row, updated)
     row.updated_at = datetime.now(UTC)

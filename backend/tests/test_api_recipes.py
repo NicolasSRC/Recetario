@@ -66,6 +66,21 @@ def test_receta_manual_incompleta_tambien_se_aprueba(client: TestClient) -> None
     assert body["extraction"]["confidence"] == 1.0
 
 
+def test_editar_receta_aprobada_la_mantiene_aprobada(client: TestClient) -> None:
+    recipe_id = client.post("/api/v1/recipes", json=_payload()).json()["id"]
+
+    response = client.patch(
+        f"/api/v1/recipes/{recipe_id}",
+        json={"title": "Tortilla de patatas y cebolla"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "Tortilla de patatas y cebolla"
+    assert body["status"] == "aprobada"
+    assert body["extraction"]["needs_review"] is False
+
+
 def test_listar_recetas(client: TestClient) -> None:
     client.post("/api/v1/recipes", json=_payload())
 
@@ -168,6 +183,18 @@ def test_exportar_markdown(client: TestClient) -> None:
     assert response.status_code == 200
     assert "# Tortilla de patatas" in response.text
     assert "## Ingredientes" in response.text
+
+
+def test_exportar_pdf(client: TestClient) -> None:
+    recipe_id = client.post("/api/v1/recipes", json=_payload()).json()["id"]
+
+    response = client.get(f"/api/v1/recipes/{recipe_id}/export?format=pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "tortilla-de-patatas.pdf" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")
+    assert len(response.content) > 1000
 
 
 def test_buscar_por_ingrediente(client: TestClient) -> None:

@@ -20,12 +20,15 @@ dependencies = [
 [project.optional-dependencies]
 # Transcripción local. Instalar con: pip install -e "backend[audio]"
 audio = ["faster-whisper>=1.0"]
+# OCR local de frames (F4). Requiere además el binario de Tesseract.
+ocr = ["pytesseract>=0.3", "Pillow>=10"]
 # F2 en adelante.
 api = [
     "fastapi>=0.112",
     "uvicorn[standard]>=0.30",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
+    "fpdf2>=2.7",
 ]
 dev = [
     "pytest>=8.2",
