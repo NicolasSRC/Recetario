@@ -152,7 +152,7 @@ experiencia de **libro de recetas**: una receta por página.
 | Elemento | Comportamiento |
 | --- | --- |
 | Vista principal | Libro abierto a dos páginas: receta a la izquierda (ingredientes) y pasos a la derecha, o una receta por página en móvil |
-| Navegación | Pasar página con botones, teclado (← →) y gestos; índice/índice lateral con todas las recetas |
+| Navegación | Pasar página con botones, teclado (← →) y contador de posición; la estantería hace de índice |
 | Portada | Estantería o portada del libro con el listado y la búsqueda |
 | Edición | Editar ingredientes y pasos en la misma página, sin salir del libro |
 | Alta manual | Crear una receta desde cero (sin video): formulario con ingredientes, pasos, tiempos y etiquetas |
