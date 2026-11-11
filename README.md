@@ -58,7 +58,14 @@ Tesseract en el `PATH`):
 
 ```powershell
 pip install -e "backend[ocr]"
+
+# Windows: Tesseract + idioma español
+winget install --id UB-Mannheim.TesseractOCR -e
+# Descarga spa.traineddata de tessdata_fast a una carpeta propia y define
+# TESSDATA_PREFIX para no necesitar permisos de administrador.
 ```
+
+En Linux: `sudo apt install tesseract-ocr tesseract-ocr-spa`.
 
 ### Uso
 
@@ -170,11 +177,12 @@ configuración, no código.
   el adaptador informa `provider.free-limit` con el tiempo de espera.
 - `yt-dlp` puede romperse cuando TikTok cambia su sitio; por eso existe la
   entrada manual y las fixtures para pruebas.
-- El OCR necesita el binario de Tesseract y el extra `[ocr]`; sin ellos el
-  agente registra la llamada como fallida y sigue con las demás fuentes.
+- El OCR necesita el binario de Tesseract y el extra `[ocr]`. En este equipo
+  están instalados (Tesseract 5.4 + `spa`) y la ruta está verificada con un
+  video sintético; si falta el binario, el agente registra la llamada como
+  fallida y sigue con las demás fuentes.
 - La comparación OCR vs visión aún no se ha medido con videos reales: falta
-  instalar Tesseract o configurar una llave de visión, y contar con los videos
-  anotados.
+  configurar una llave de visión y contar con los videos anotados.
 - La transcripción con `small` sobre audio sintético dio resultados pobres
   (detectó inglés); con voz real habrá que revisar el idioma y el modelo.
 - El recetario es de uso personal y un solo usuario.

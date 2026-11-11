@@ -261,15 +261,15 @@ un agente que decide qué fuentes usar.
 | CLI | `ingest --url` usa el agente; `--no-frames` y `--interval`; comando `frames` para un video local | ✅ |
 | Eval | `python -m app.evals.screen_text`: F1 por palabras para comparar OCR y visión sobre los mismos frames | ✅ |
 | Frontend | Etapa «Leer el texto en pantalla» y panel «Qué hizo el agente» con duración, errores y costo | ✅ |
+| Verificación OCR | Tesseract 5.4 + `spa` instalados; video sintético de 3 frames leído completo y F1 = 1.0 en la eval | ✅ |
 | Pruebas | Agente (RA-01/02/03/04/05), frames, OCR, visión, traza en la API y métrica de la eval | ✅ |
 
 ### 5.2 Pendiente para cerrar F4
 
 | Tarea | Por qué falta | Prioridad |
 | --- | --- | --- |
-| Medir OCR vs visión con videos reales | No hay Tesseract instalado ni llave de visión; faltan los videos anotados | Alta |
-| Ejecutar la ruta completa con TikTok real | La cuota del LLM gratuito está agotada y no hay URLs/videos locales en el repo | Alta |
-| Instalar `backend[ocr]` + binario de Tesseract | Dependencia opcional, no incluida en el entorno actual | Media |
+| Medir OCR vs visión con videos reales | Falta la llave de visión y los videos anotados; el OCR ya está instalado y verificado | Alta |
+| Ejecutar la ruta completa con TikTok real | La cuota del LLM gratuito está agotada y aún no hay URLs/videos en el repo | Alta |
 
 ### 5.3 Cómo probarla
 
