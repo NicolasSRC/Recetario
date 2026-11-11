@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     # Base de datos (F2)
     database_url: str = "sqlite:///./data/recetario.db"
 
+    # CORS para el frontend del libro (F3)
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    # En desarrollo el frontend puede cambiar de puerto (3000, 3001…).
+    cors_origin_regex: str = r"http://(localhost|127\.0\.0\.1):\d+"
+
     # Transcripción
     whisper_model: str = "small"
     whisper_device: str = "cpu"

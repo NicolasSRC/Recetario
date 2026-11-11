@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from app.adapters.openai_llm import OpenAIRecipeLLM
 from app.adapters.opencode_llm import OpenCodeLLM
-from app.cli import build_llm
 from app.config import Settings
+from app.llm_factory import build_llm
 
 
 def test_proveedor_por_defecto_es_opencode() -> None:

@@ -49,6 +49,14 @@ def create_recipe(payload: RecipeCreate, session: SessionDep) -> Recipe:
     except BusinessRuleError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # Una receta escrita a mano no la extrajo el modelo: el usuario es la
+    # fuente y la aprueba al guardarla. Los trabajos de ingesta sí conservan
+    # el estado `por_revisar` que calcula la validación.
+    recipe.extraction.confidence = 1.0
+    recipe.extraction.flags = []
+    recipe.extraction.needs_review = False
+    recipe.status = Status.APROBADA
+
     saved, created = repository.save_recipe(session, recipe, dedupe=payload.source_url is not None)
     if not created:
         raise HTTPException(status_code=409, detail="ya existe una receta para esa URL")

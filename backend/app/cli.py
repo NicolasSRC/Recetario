@@ -20,48 +20,21 @@ from dataclasses import asdict
 from pathlib import Path
 
 from app.adapters.manual import build_metadata, parse_screen_text, parse_transcript, read_text
-from app.adapters.openai_llm import OpenAIRecipeLLM
-from app.adapters.opencode_llm import OpenCodeLLM, OpenCodeQuotaError
+from app.adapters.opencode_llm import OpenCodeQuotaError
 from app.adapters.whisper_transcriber import WhisperTranscriber
 from app.adapters.ytdlp_extractor import VideoDownloadError, YtDlpExtractor
-from app.config import ConfigError, Settings, get_settings
+from app.config import ConfigError, get_settings
 from app.domain.content import RecipeContext
 from app.domain.units import parse_ingredient
 from app.domain.validation import NotARecipeError
+from app.llm_factory import build_llm
 from app.pipeline.extract_recipe import ExtractionFailed, extract_recipe
-from app.ports.llm import RecipeLLM
 
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_CONFIG = 2
 EXIT_NOT_A_RECIPE = 3
 EXIT_QUOTA = 4
-
-
-def build_llm(settings: Settings, model_override: str | None = None) -> tuple[RecipeLLM, str]:
-    """Elige el proveedor según configuración (RA-07, RNF-09)."""
-    if settings.llm_provider == "opencode":
-        model = model_override or settings.opencode_model
-        return (
-            OpenCodeLLM(
-                model=model,
-                agent=settings.opencode_agent,
-                executable=settings.opencode_executable,
-                timeout_s=settings.opencode_timeout_s,
-            ),
-            model,
-        )
-
-    model = model_override or settings.llm_model
-    return (
-        OpenAIRecipeLLM(
-            api_key=settings.require_api_key(),
-            model=model,
-            base_url=settings.llm_base_url,
-            temperature=settings.llm_temperature,
-        ),
-        model,
-    )
 
 
 def build_parser() -> argparse.ArgumentParser:

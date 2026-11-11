@@ -51,6 +51,21 @@ def test_crear_receta_manual(client: TestClient) -> None:
     assert body["id"]
 
 
+def test_receta_manual_incompleta_tambien_se_aprueba(client: TestClient) -> None:
+    payload = _payload(
+        servings=None,
+        steps=[{"order": 1, "text": "Mezclar todo y servir."}],
+    )
+
+    response = client.post("/api/v1/recipes", json=payload)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "aprobada"
+    assert body["extraction"]["flags"] == []
+    assert body["extraction"]["confidence"] == 1.0
+
+
 def test_listar_recetas(client: TestClient) -> None:
     client.post("/api/v1/recipes", json=_payload())
 

@@ -147,6 +147,7 @@ class JobRow(Base):
     source_url: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="en_cola", index=True)
     stage: Mapped[str | None] = mapped_column(String(50))
+    payload: Mapped[dict | None] = mapped_column(JSON)
     error_code: Mapped[str | None] = mapped_column(String(50))
     error_message: Mapped[str | None] = mapped_column(Text)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
