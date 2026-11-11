@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+@theme {
+  --color-desk: #1e1811;
+  --color-desk-soft: #2b2318;
+  --color-paper: #f8f1e1;
+  --color-paper-2: #f1e7d2;
+  --color-paper-3: #e9dcc1;
+  --color-ink: #2b2118;
+  --color-ink-soft: #6d5b45;
+  --color-wine: #7b2d3b;
+  --color-wine-soft: #a4525f;
+  --color-gold: #b48a4a;
+  --color-gold-soft: #d8bc86;
+  --color-sage: #5c6f55;
+
+  --font-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua",
+    Palatino, Georgia, "Times New Roman", serif;
+  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+    Arial, sans-serif;
+
+  --shadow-book: 0 40px 70px -28px rgba(0, 0, 0, 0.75),
+    0 10px 24px -12px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 18px 30px -18px rgba(0, 0, 0, 0.55);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-desk);
+    background-image:
+      radial-gradient(
+        circle at 50% -10%,
+        rgba(180, 138, 74, 0.16),
+        transparent 55%
+      ),
+      radial-gradient(
+        circle at 85% 100%,
+        rgba(123, 45, 59, 0.18),
+        transparent 45%
+      ),
+      repeating-linear-gradient(
+        92deg,
+        rgba(255, 255, 255, 0.015) 0px,
+        rgba(255, 255, 255, 0.015) 2px,
+        transparent 2px,
+        transparent 9px
+      );
+    color: var(--color-paper);
+  }
+
+  ::selection {
+    background: var(--color-gold-soft);
+    color: var(--color-ink);
+  }
+}
+
+/* Textura de papel para las páginas del libro. */
+.paper {
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(
+      circle at 18% 8%,
+      rgba(255, 255, 255, 0.7),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 90% 92%,
+      rgba(180, 138, 74, 0.12),
+      transparent 40%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(90, 70, 40, 0.028) 0px,
+      rgba(90, 70, 40, 0.028) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  color: var(--color-ink);
+}
+
+.paper-edge {
+  box-shadow:
+    inset -1px 0 0 rgba(90, 70, 40, 0.12),
+    inset 1px 0 0 rgba(255, 255, 255, 0.5);
+}
+
+.gutter {
+  background: linear-gradient(
+    to right,
+    rgba(60, 44, 26, 0.16),
+    rgba(60, 44, 26, 0.03) 18%,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(60, 44, 26, 0.03) 82%,
+    rgba(60, 44, 26, 0.16)
+  );
+}
+
+/* Lomo del libro en la portada. */
+.spine {
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.32),
+    rgba(255, 255, 255, 0.12) 40%,
+    rgba(0, 0, 0, 0.22)
+  );
+}
+
+/* Cinta de estado "por revisar". */
+.ribbon {
+  background: linear-gradient(135deg, #8f3544, #6d2331);
+  box-shadow: 0 6px 12px -6px rgba(0, 0, 0, 0.7);
+}
+
+/* Animación de entrada de página. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.page-in {
+  animation: page-in 320ms ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fade-in 240ms ease-out both;
+}
+
+/* Campos de formulario con aspecto de libreta. */
+.field {
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(109, 91, 69, 0.28);
+  background: rgba(255, 252, 244, 0.72);
+  padding: 0.5rem 0.7rem;
+  color: var(--color-ink);
+  outline: none;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.field::placeholder {
+  color: rgba(109, 91, 69, 0.55);
+}
+
+.field:focus {
+  border-color: var(--color-gold);
+  background: #fffdf8;
+  box-shadow: 0 0 0 3px rgba(180, 138, 74, 0.22);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+/* Enlace con subrayado dibujado. */
+.link-ink {
+  color: var(--color-wine);
+  text-decoration: underline;
+  text-decoration-color: rgba(123, 45, 59, 0.35);
+  text-underline-offset: 3px;
+}
+
+.link-ink:hover {
+  text-decoration-color: var(--color-wine);
+}
+
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-page {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+}

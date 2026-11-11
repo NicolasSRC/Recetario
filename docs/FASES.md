@@ -19,13 +19,14 @@
 | Fase | Alcance | Estado | Criterio de aceptación | Verificación |
 | --- | --- | --- | --- | --- |
 | **F1** | MVP sin interfaz: URL/texto → receta JSON validada por CLI | 🟡 **En curso** | 10 de 15 videos producen JSON válido | Código y pruebas listos; falta ejecutar con LLM real y 15 videos |
-| **F2** | Persistencia y API REST | 🟡 **En curso** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD de recetas y exportación listos; faltan jobs y Alembic |
-| **F3** | Frontend: lista, detalle, edición, aprobación, exportación | ⬜ Pendiente | Flujo e2e completo en CI | — |
+| **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 115 tests en verde |
+| **F3** | Frontend: libro, edición, aprobación, exportación | 🟡 **Casi completa** | Flujo e2e completo en CI | Libro verificado a mano en navegador; falta test e2e automatizado y PDF |
 | **F4** | Frames y agente con herramientas | ⬜ Pendiente | Mejora medible frente a F1 en videos con texto en pantalla | — |
 | **F5** | Cola, reintentos y despliegue | ⬜ Pendiente | `docker compose up` levanta todo y CI en verde | — |
 | **F6** | Evals, búsqueda semántica y MCP | ⬜ Pendiente | Reporte de evals en README, búsqueda por significado, MCP con 3 herramientas | — |
 
-**Avance global estimado:** F1 completo en código y F2 a la mitad (≈ 25 %).
+**Avance global estimado:** F1 completo en código, F2 cerrada y F3 usable de
+punta a punta (≈ 50 %).
 
 ---
 
@@ -55,8 +56,8 @@ estructurada, validada y trazable — antes de añadir base de datos o interfaz.
 | Pipeline | `pipeline/extract_recipe.py`: LLM → ensamblado → validación con reintentos (RF-23) | ✅ |
 | CLI | `recetario parse` y `recetario ingest` (`--url`, archivos, `--dry-run`, `--out`) | ✅ |
 | Fixtures | 4 casos: caption completo, transcripción en inglés, texto en pantalla, no-receta | ✅ |
-| Pruebas | **81 tests**, cobertura **~80 %** total y >90 % en dominio | ✅ |
-| Calidad | `ruff check` y `ruff format --check` limpios; `mypy` sin errores | ✅ |
+| Pruebas | **115 tests** en total (dominio, adaptadores, API y trabajos), cobertura >90 % en dominio | ✅ |
+| Calidad | `ruff check`, `ruff format --check` y `mypy` limpios | ✅ |
 
 ### 2.2 Pendiente para cerrar F1
 
@@ -65,9 +66,6 @@ estructurada, validada y trazable — antes de añadir base de datos o interfaz.
 | Ejecutar el pipeline con LLM real sobre las fixtures | La cuota gratuita de OpenCode se agotó (`provider.free-limit`, ~3,5 h de espera) | Alta |
 | Reunir y anotar 15 videos de prueba | Es el criterio de aceptación (10/15); el usuario ya los tiene | Alta |
 | Instalar extra `audio` y probar `yt-dlp` + `faster-whisper` reales | La ruta de descarga/transcripción no se ha ejecutado | Media |
-| `git init` y primer commit etiquetado `v0.1.0` | El directorio aún no tiene commits | Media |
-| ADR-001, ADR-002 y ADR-003 | Entregable de `docs/adr/` | Media |
-| README mínimo de F1 | Entregable del repo | Media |
 
 ### 2.3 Cómo verificar el estado actual
 
@@ -103,19 +101,22 @@ con base de datos, estados de trabajo e idempotencia.
 | Base de datos | SQLite con SQLAlchemy 2.0: `sources`, `recipes`, `ingredients`, `steps`, `tags`, `recipe_tags`, `jobs`, `job_events` | ✅ |
 | Repositorio | Conversión dominio ↔ filas, guardado idempotente por URL (RP-02) | ✅ |
 | API de recetas | `POST`, `GET` (lista y detalle), `PATCH`, `DELETE` | ✅ |
-| Alta manual | `POST /api/v1/recipes` sin video, para el libro de F3 | ✅ |
+| Alta manual | `POST /api/v1/recipes` sin video; se aprueba al guardar (`confianza 1.0`, sin flags) | ✅ |
 | Edición | `PATCH` de título, ingredientes, pasos, etiquetas y estado | ✅ |
 | Búsqueda | `GET /api/v1/recipes?q=` por título e ingrediente | ✅ |
 | Exportación | JSON-LD (schema.org/Recipe) y Markdown | ✅ |
+| Trabajos | `POST /api/v1/jobs`, `GET /jobs/{id}`, `retry`, `cancel` con estados `en_cola/procesando/lista/fallida/cancelada` | ✅ |
+| Etapas | `descargando → transcribiendo → extrayendo → guardando`, visibles para el polling de la UI | ✅ |
+| Errores | Códigos estables: `url_invalida`, `descarga_bloqueada`, `transcripcion_vacia`, `esquema_invalido`, `cuota_agotada`, `no_es_receta`, `error_interno` | ✅ |
+| Procesamiento | `ThreadJobRunner` en hilos daemon; sustituible por una cola real en F5 | ✅ |
+| CORS | Orígenes locales configurables (`cors_origins` + `cors_origin_regex`) | ✅ |
 | OpenAPI | Generado automáticamente en `/docs` y `/openapi.json` | ✅ |
-| Pruebas | 15 tests de API (CRUD, búsqueda, exportación, duplicados, validación) | ✅ |
+| Pruebas | 115 tests: CRUD, búsqueda, exportación, duplicados, validación, trabajos y clasificación de errores | ✅ |
 
-### 3.2 Pendiente
+### 3.2 Pendiente (no bloquea el criterio de aceptación)
 
 | Tarea | Prioridad |
 | --- | --- |
-| Endpoints de trabajos: `POST /jobs`, `GET /jobs/{id}`, `retry`, `cancel` | Alta |
-| Procesamiento en segundo plano de la ingesta por URL | Alta |
 | Migraciones con Alembic | Media |
 | Exportación a PDF | Media |
 | Pruebas de integración con Postgres | Media |
@@ -141,7 +142,7 @@ duplica recetas.
 
 ---
 
-## 4. F3 · Frontend ⬜
+## 4. F3 · Frontend 🟡
 
 **Objetivo:** que el flujo completo se pueda usar sin consola, con una
 experiencia de **libro de recetas**: una receta por página.
@@ -173,6 +174,47 @@ experiencia de **libro de recetas**: una receta por página.
 10. Botones de exportación JSON-LD / Markdown / PDF.
 11. Accesibilidad básica WCAG 2.1 AA (RNF-12).
 12. Test e2e con Playwright y LLM/descarga simulados.
+
+### 4.1 Completado
+
+| Área | Entregable | Estado |
+| --- | --- | --- |
+| Proyecto | Next.js 16 (App Router), React 19, TypeScript estricto y Tailwind 4 | ✅ |
+| Estantería | Portada con búsqueda (título/ingrediente), filtros por estado y tarjetas con lomo de color | ✅ |
+| Libro | Vista a doble página: ingredientes a la izquierda, pasos y fuente a la derecha; una columna en móvil | ✅ |
+| Navegación | Botones anterior/siguiente, contador de página y flechas ← → del teclado | ✅ |
+| Edición | `RecipeForm` reutilizable: título, tiempos, raciones, ingredientes, pasos, etiquetas y utensilios; guarda con `PATCH` | ✅ |
+| Alta manual | `/nueva`: receta sin video; entra aprobada y sin banner de revisión | ✅ |
+| Ingesta | `/importar`: URL de TikTok o texto pegado; polling cada 2 s y línea de etapas | ✅ |
+| Estados | Insignias `aprobada/por_revisar/descartada` y cinta de aviso con los flags del modelo | ✅ |
+| Acciones | Aprobar, borrar, imprimir (`window.print`), exportar JSON-LD y Markdown | ✅ |
+| Responsive | Diseño de escritorio, tableta y móvil | ✅ |
+| Calidad | `npm run lint`, `npm run typecheck` y `npm run build` limpios | ✅ |
+| Verificación manual | Playwright + Edge: editar título e ingredientes, crear receta manual y verla en la estantería | ✅ |
+
+### 4.2 Pendiente
+
+| Tarea | Prioridad |
+| --- | --- |
+| Test e2e automatizado con Playwright en CI (hoy la verificación es manual) | Alta |
+| Exportación a PDF (se usa imprimir del navegador como sustituto) | Media |
+| Paginación real en la estantería cuando haya muchas recetas | Baja |
+
+### 4.3 Cómo probarla
+
+```powershell
+# 1) API
+cd backend
+..\.venv\Scripts\python.exe -m uvicorn app.asgi:app --reload
+
+# 2) Libro (en otra terminal)
+cd frontend
+npm install
+cmd /c "npm run dev"
+```
+
+Abrir <http://localhost:3000>. La URL de la API se configura con
+`NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:8000`).
 
 ### Criterio de aceptación
 
@@ -297,12 +339,13 @@ tres herramientas.
 
 ## 9. Próximos pasos inmediatos
 
-1. **Cerrar F2**: endpoints de trabajos (`POST /jobs`, `GET /jobs/{id}`, `retry`,
-   `cancel`) y procesamiento en segundo plano.
-2. **Abrir F3**: maqueta del libro con datos de la API (una receta por página,
-   edición en línea y alta manual).
-3. **Validar F1** cuando la cuota del modelo se restablezca: 10/15 JSON válidos.
-4. **Reintentar la ingesta real** con `yt-dlp` + `faster-whisper` instalados.
+1. **Validar F1** cuando la cuota del modelo se restablezca: 10/15 JSON válidos
+   con los videos reales.
+2. **Cerrar F3**: test e2e automatizado (Playwright) y exportación a PDF.
+3. **Probar la ingesta real** con `yt-dlp` + `faster-whisper` (extra `audio`).
+4. **Abrir F4**: muestreo de frames y agente que decide qué fuentes usar.
+5. **Preparar F5**: sustituir `ThreadJobRunner` por Celery/Redis y añadir
+   `docker compose` + CI.
 
 ---
 
@@ -311,9 +354,10 @@ tres herramientas.
 | Decisión | Afecta | Estado |
 | --- | --- | --- |
 | Modelo de lenguaje y tope de costo | F1, F4, F6 | **Resuelto:** OpenCode local con `deepseek-v4.1-flash-free`; adaptador OpenAI como alternativa |
-| Postgres desde F2 o SQLite hasta F5 | F2, F5 | Pendiente (recomendado: SQLite) |
+| Postgres desde F2 o SQLite hasta F5 | F2, F5 | **Resuelto:** SQLite hasta F5 (`data/recetario.db`), sin Alembic todavía |
 | Visión vs OCR para texto en pantalla | F4 | Pendiente (se decide con evals) |
 | Dónde se despliega la demo | F5 | Pendiente |
 | Repositorio público desde el inicio | F6 (dataset) | Pendiente |
 | Transcripción local vs API | F1 | **Resuelto:** local por defecto |
-| Estilo del frontend | F3 | **Resuelto:** libro, una receta por página |
+| Estilo del frontend | F3 | **Resuelto:** libro, una receta por página (ADR-004) |
+| Ejecución de trabajos en F2 | F2, F5 | **Resuelto:** hilos daemon con interfaz `JobRunner`; cola real en F5 |

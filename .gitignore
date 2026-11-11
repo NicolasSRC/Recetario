@@ -14,12 +14,18 @@ htmlcov/
 
 # Secretos y datos locales
 .env
+.env.local
 data/
+*.db
+*.db-journal
+*.db-wal
 
 # Frontend (F3)
 node_modules/
 .next/
 out/
+next-env.d.ts
+*.tsbuildinfo
 
 # Sistema
 .DS_Store
