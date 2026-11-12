@@ -29,3 +29,9 @@ def test_override_de_modelo() -> None:
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     _, model = build_llm(settings, "opencode/otro-modelo")
     assert model == "opencode/otro-modelo"
+
+
+def test_base_url_vacia_se_trata_como_none() -> None:
+    settings = Settings(_env_file=None, llm_base_url="")  # type: ignore[call-arg]
+
+    assert settings.llm_base_url is None

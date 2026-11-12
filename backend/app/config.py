@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     llm_temperature: float = 0.0
 
+    @field_validator("llm_base_url", mode="before")
+    @classmethod
+    def _empty_base_url_is_none(cls, value: object) -> object:
+        # Docker Compose pasa `RECETARIO_LLM_BASE_URL=` cuando no se define;
+        # un string vacío no es una URL válida para el cliente de OpenAI.
+        return None if isinstance(value, str) and not value.strip() else value
+
     # LLM a través de OpenCode local
     opencode_model: str = "opencode/deepseek-v4.1-flash-free"
     opencode_agent: str = "recetario-extractor"
@@ -41,8 +48,17 @@ class Settings(BaseSettings):
     max_validation_retries: int = 2
     max_cost_usd_per_video: float = 0.25
 
-    # Base de datos (F2)
+    # Base de datos (F2). En Docker se usa Postgres con psycopg.
     database_url: str = "sqlite:///./data/recetario.db"
+
+    # Cola de trabajos (F5): thread para desarrollo local, celery en Docker.
+    job_runner: Literal["thread", "celery"] = "thread"
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    celery_broker_url: str | None = None
+    celery_result_backend: str | None = None
+    job_max_retries: int = 3
+    job_retry_backoff_s: float = 5.0
+    job_retry_backoff_max_s: float = 300.0
 
     # CORS para el frontend del libro (F3)
     cors_origins: list[str] = [
@@ -80,6 +96,14 @@ class Settings(BaseSettings):
                 "falta RECETARIO_LLM_API_KEY. Copia .env.example a .env y rellena la llave."
             )
         return self.llm_api_key.get_secret_value()
+
+    @property
+    def broker_url(self) -> str:
+        return self.celery_broker_url or self.redis_url
+
+    @property
+    def result_backend(self) -> str:
+        return self.celery_result_backend or self.redis_url
 
 
 @lru_cache(maxsize=1)

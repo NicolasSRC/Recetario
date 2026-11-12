@@ -1,6 +1,6 @@
 # Fases del proyecto — estado de avance
 
-> Documento vivo. Última actualización: **11 de noviembre de 2026**.
+> Documento vivo. Última actualización: **12 de noviembre de 2026**.
 > Referencia: `Recetario con IA Requerimientos del proyecto.md` (sección 7).
 
 ## Leyenda
@@ -19,14 +19,15 @@
 | Fase | Alcance | Estado | Criterio de aceptación | Verificación |
 | --- | --- | --- | --- | --- |
 | **F1** | MVP sin interfaz: URL/texto → receta JSON validada por CLI | 🟡 **En curso** | 10 de 15 videos producen JSON válido | Metadatos 15/15, audio y frames reales verificados; falta el LLM real (cuota agotada) |
-| **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 141 tests en verde |
+| **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 153 tests en verde |
 | **F3** | Frontend: libro, edición, aprobación, exportación | ✅ **Completada** | Flujo e2e completo en CI | E2E de Playwright (2 casos), PDF, CI de backend/frontend/e2e |
 | **F4** | Frames y agente con herramientas | 🟡 **En curso** | Mejora medible frente a F1 en videos con texto en pantalla | Frames, OCR/visión, agente, traza y eval implementados y probados con 15 videos reales; el lote real casi no trae texto en pantalla, así que la mejora no es medible todavía |
-| **F5** | Cola, reintentos y despliegue | ⬜ Pendiente | `docker compose up` levanta todo y CI en verde | — |
+| **F5** | Cola, reintentos y despliegue | 🟡 **Casi cerrada** | `docker compose up` levanta todo y CI en verde | Compose verificado en local (5 servicios, Postgres + pgvector, worker Celery, alta y búsqueda); falta confirmar CI tras el push |
 | **F6** | Evals, búsqueda semántica y MCP | ⬜ Pendiente | Reporte de evals en README, búsqueda por significado, MCP con 3 herramientas | — |
 
 **Avance global estimado:** F1 completo en código, F2 y F3 cerradas, F4
-implementada y pendiente de validación con videos reales (≈ 65 %).
+implementada y pendiente de validación con videos reales, F5 implementada y
+pendiente de la prueba final con Docker (≈ 75 %).
 
 ---
 
@@ -56,7 +57,7 @@ estructurada, validada y trazable — antes de añadir base de datos o interfaz.
 | Pipeline | `pipeline/extract_recipe.py`: LLM → ensamblado → validación con reintentos (RF-23) | ✅ |
 | CLI | `recetario parse` y `recetario ingest` (`--url`, archivos, `--dry-run`, `--out`) | ✅ |
 | Fixtures | 4 casos: caption completo, transcripción en inglés, texto en pantalla, no-receta | ✅ |
-| Pruebas | **141 tests** en total (dominio, adaptadores, API, trabajos y agente), cobertura >90 % en dominio | ✅ |
+| Pruebas | **153 tests** en total (dominio, adaptadores, API, trabajos, cola y agente), cobertura >90 % en dominio | ✅ |
 | Calidad | `ruff check`, `ruff format --check` y `mypy` limpios | ✅ |
 
 ### 2.2 Pendiente para cerrar F1
@@ -116,7 +117,7 @@ con base de datos, estados de trabajo e idempotencia.
 | Procesamiento | `ThreadJobRunner` en hilos daemon; sustituible por una cola real en F5 | ✅ |
 | CORS | Orígenes locales configurables (`cors_origins` + `cors_origin_regex`) | ✅ |
 | OpenAPI | Generado automáticamente en `/docs` y `/openapi.json` | ✅ |
-| Pruebas | 141 tests: CRUD, búsqueda, exportación, duplicados, validación, trabajos, agente y clasificación de errores | ✅ |
+| Pruebas | 153 tests: CRUD, búsqueda, exportación, duplicados, validación, trabajos, agente, clasificación de errores, idempotencia y reintentos | ✅ |
 
 ### 3.2 Pendiente (no bloquea el criterio de aceptación)
 
@@ -361,21 +362,64 @@ Mejora medible frente a F1 en los videos que solo traen texto en pantalla.
 
 ---
 
-## 6. F5 · Cola y despliegue ⬜
+## 6. F5 · Cola y despliegue 🟡
 
 **Objetivo:** pasar de un proceso síncrono a un sistema operable y reproducible.
 
-### Tareas
+### 6.1 Completado
 
-1. Celery + Redis; tareas idempotentes.
-2. Reintentos con espera creciente y causa de fallo clasificada (RP-01, RP-03).
-3. Reintento manual y cancelación desde la API (RP-04, RP-05).
-4. `docker-compose.yml`: `api`, `worker`, `redis`, `db` (Postgres + pgvector),
-   `frontend`.
-5. `.env.example` definitivo y volúmenes de datos.
-6. GitHub Actions: linter, tipos, tests, build de imágenes, escaneo de
-   dependencias.
-7. Migración de SQLite a Postgres si se empezó con SQLite.
+| Área | Entregable | Estado |
+| --- | --- | --- |
+| Cola | Celery 5.7 + Redis; `CeleryJobRunner` y `build_job_runner` seleccionables con `RECETARIO_JOB_RUNNER` | ✅ |
+| Idempotencia | `_claim` con `UPDATE ... WHERE status='en_cola'`: una reentrega o un doble submit no duplica el trabajo | ✅ |
+| Reintentos | Solo errores transitorios (`descarga_bloqueada`, `error_interno`), espera 5 s → 10 s → 20 s, máximo 3 y tope de 300 s (RP-01, RP-03) | ✅ |
+| Reintento manual | `POST /api/v1/jobs/{id}/retry` vuelve a encolar un trabajo fallido o cancelado (RP-04) | ✅ |
+| Cancelación | `POST /api/v1/jobs/{id}/cancel`; el worker comprueba el estado antes de guardar (RP-05) | ✅ |
+| Persistencia | El mismo modelo SQLAlchemy funciona con SQLite y Postgres (`psycopg`) | ✅ |
+| Compose | `db` (pgvector/pg16), `redis`, `api`, `worker`, `frontend`, con healthchecks y volúmenes | ✅ |
+| Imágenes | Backend Python 3.11 + ffmpeg + Tesseract + `spa`; frontend Next.js standalone multi-stage | ✅ |
+| Configuración | `.env.example` con cola, Postgres y reintentos; `.env` opcional en Compose | ✅ |
+| CI | `pip-audit`, `npm audit`, build de ambas imágenes y `dependency-review` en pull requests | ✅ |
+| Pruebas | 11 tests nuevos de idempotencia, reentrega, requeue, códigos reintentables, backoff y selección de runner | ✅ |
+
+### 6.2 Cómo probarla
+
+```powershell
+# Desarrollo local: hilos, sin Redis
+RECETARIO_JOB_RUNNER=thread
+
+# Docker: Postgres + Redis + Celery + frontend
+docker compose up --build -d
+docker compose ps
+docker compose logs -f worker
+```
+
+La verificación mínima es crear una receta manual desde el libro y comprobar
+que aparece en Postgres; después, encolar una URL y ver el trabajo pasar por
+`en_cola → procesando → leyendo_pantalla → guardando → lista` en los logs del
+worker.
+
+### 6.3 Verificación real
+
+| Comprobación | Resultado |
+| --- | --- |
+| `docker compose config --quiet` | ✅ |
+| `docker compose build` | ✅ imágenes `recetario-api` (1,87 GB), `recetario-worker` y `recetario-frontend` (307 MB) |
+| `docker compose up -d` | ✅ 5 servicios; `api`, `db` y `redis` en `healthy` |
+| `/health`, `/docs` y frontend | ✅ `ok`, HTTP 200 y HTTP 200 en <http://localhost:3000> |
+| Worker Celery | ✅ conectado a Redis, registra `recetario.process_job` y consume trabajos |
+| Reintentos | ✅ un error transitorio se reprograma con espera creciente; un error de configuración termina en `fallida` sin reintentar |
+| Postgres | ✅ 8 tablas creadas y extensión `vector` disponible |
+| Alta manual + búsqueda | ✅ `POST /api/v1/recipes` crea la receta en Postgres y `GET /api/v1/recipes?q=patatas` la encuentra |
+| `pytest`, `ruff`, `mypy` | ✅ 153 tests, sin hallazgos |
+| `pip-audit --skip-editable` | ✅ sin vulnerabilidades |
+| `npm audit --audit-level=high` | ✅ 0 altas/críticas (7 moderadas en tooling de ESLint) |
+| E2E de Playwright | ✅ 2 casos en verde |
+
+La verificación con Postgres destapó un fallo que SQLite ocultaba: la búsqueda
+usaba `SELECT DISTINCT` sobre una tabla con columnas JSON y Postgres no define
+igualdad para `json`. Se sustituyó por una subconsulta sobre `ingredients`, que
+funciona igual en ambos motores.
 
 ### Criterio de aceptación
 
@@ -453,8 +497,8 @@ tres herramientas.
    configurar visión, y medir OCR vs visión con `app.evals.screen_text`.
 3. **Videos 02, 03 y 10:** el agente ya continúa con el caption cuando no hay
    voz; si el LLM no alcanza, se marcan como `por_revisar` o no-receta.
-4. **Preparar F5**: sustituir `ThreadJobRunner` por Celery/Redis, añadir
-   `docker compose` y migrar a Postgres.
+4. **Cerrar F5**: confirmar `docker compose up --build -d`, `/health`, libro en
+   el puerto 3000 y consumo del worker; después commit y push.
 
 ---
 
@@ -466,7 +510,7 @@ tres herramientas.
 | Postgres desde F2 o SQLite hasta F5 | F2, F5 | **Resuelto:** SQLite hasta F5 (`data/recetario.db`), sin Alembic todavía |
 | Visión vs OCR para texto en pantalla | F4 | **Resuelto por configuración:** OCR local por defecto, visión seleccionable con `RECETARIO_SCREEN_TEXT_READER`; falta la medición comparativa |
 | Política del agente | F4 | **Resuelto:** determinista y auditable (ADR-005), no un selector de herramientas por LLM |
-| Dónde se despliega la demo | F5 | Pendiente |
+| Dónde se despliega la demo | F5 | **Resuelto:** Docker Compose local (Postgres + Redis + API + worker + frontend) |
 | Repositorio público desde el inicio | F6 (dataset) | Pendiente |
 | Transcripción local vs API | F1 | **Resuelto:** local por defecto |
 | Estilo del frontend | F3 | **Resuelto:** libro, una receta por página (ADR-004) |

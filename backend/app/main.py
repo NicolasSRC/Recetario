@@ -9,7 +9,7 @@ from app.api.routes.jobs import router as jobs_router
 from app.api.routes.recipes import router as recipes_router
 from app.config import Settings, get_settings
 from app.db.session import create_db_engine, create_session_factory, init_db
-from app.jobs.runner import ThreadJobRunner
+from app.jobs.runner import build_job_runner
 from app.llm_factory import build_llm
 
 
@@ -28,9 +28,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.session_factory = session_factory
     app.state.llm_factory = build_llm
-    app.state.job_runner = ThreadJobRunner(
+    app.state.job_runner = build_job_runner(
+        settings,
         session_factory=session_factory,
-        settings=settings,
         llm_factory=build_llm,
     )
 

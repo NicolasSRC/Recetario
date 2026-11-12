@@ -1,8 +1,8 @@
 """Ejecución de trabajos fuera del ciclo de la petición HTTP.
 
-Para el MVP basta un hilo por trabajo: el recetario es de un solo usuario y los
-trabajos son pocos. Cuando haya varios workers, esta interfaz se sustituye por
-una cola real (RQ, Dramatiq o similar) sin tocar la API.
+En desarrollo local basta un hilo por trabajo. En Docker se usa Celery con
+Redis (`RECETARIO_JOB_RUNNER=celery`); la API solo cambia de implementación del
+puerto `JobRunner`.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 from typing import Protocol
 
 from app.config import Settings
@@ -56,3 +57,34 @@ class ThreadJobRunner:
             )
         except Exception:  # el hilo no debe morir en silencio
             logger.exception("el hilo del trabajo %s terminó con error", job_id)
+
+
+def _enqueue_in_celery(job_id: str) -> None:
+    # Import perezoso: Celery solo es obligatorio cuando se usa esta cola.
+    from app.jobs.tasks import process_job_task
+
+    process_job_task.delay(job_id)
+
+
+class CeleryJobRunner:
+    """Publica el trabajo en la cola; el worker lo procesa."""
+
+    def __init__(self, send: Callable[[str], None] | None = None) -> None:
+        self._send = send or _enqueue_in_celery
+
+    def submit(self, job_id: str) -> None:
+        self._send(job_id)
+
+
+def build_job_runner(
+    settings: Settings,
+    session_factory: SessionFactory,
+    llm_factory: LLMFactory = build_llm,
+) -> JobRunner:
+    if settings.job_runner == "celery":
+        return CeleryJobRunner()
+    return ThreadJobRunner(
+        session_factory=session_factory,
+        settings=settings,
+        llm_factory=llm_factory,
+    )

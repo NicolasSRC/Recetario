@@ -215,17 +215,16 @@ def list_recipes(
 
     if query:
         pattern = f"%{query.strip()}%"
-        statement = statement.join(RecipeRow.ingredients).where(
-            or_(RecipeRow.title.ilike(pattern), IngredientRow.name.ilike(pattern))
-        )
-        count_statement = count_statement.join(RecipeRow.ingredients).where(
-            or_(RecipeRow.title.ilike(pattern), IngredientRow.name.ilike(pattern))
-        )
+        # Subconsulta en vez de JOIN + DISTINCT: Postgres no define igualdad
+        # para columnas JSON, y `SELECT DISTINCT` fallaría sobre `recipes`.
+        by_ingredient = select(IngredientRow.recipe_id).where(IngredientRow.name.ilike(pattern))
+        condition = or_(RecipeRow.title.ilike(pattern), RecipeRow.id.in_(by_ingredient))
+        statement = statement.where(condition)
+        count_statement = count_statement.where(condition)
 
     total = session.scalar(count_statement) or 0
     rows = session.scalars(
         statement.options(*_LOAD_OPTIONS)
-        .distinct()
         .order_by(RecipeRow.created_at.desc())
         .limit(limit)
         .offset(offset)

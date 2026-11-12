@@ -38,28 +38,83 @@ guardada en un recetario propio que se puede buscar, editar y exportar.
 | API y base de datos | FastAPI + SQLAlchemy 2 + SQLite (Postgres en F5) |
 | Frontend | Next.js 16 + React 19 + TypeScript + Tailwind 4 |
 
-## Arranque rápido
+## Arranque local (desarrollo)
+
+### 1. Requisitos
+
+| Herramienta | Para qué |
+| --- | --- |
+| Python 3.11 | Backend |
+| Node.js 22 | Libro (frontend) |
+| ffmpeg | Muestreo de frames (F4) |
+| Tesseract + `spa` | OCR local (opcional) |
+| OpenCode | LLM local sin llave (o una API compatible con OpenAI) |
+
+### 2. Instalación (una sola vez)
 
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -e "backend[dev]"
+pip install --upgrade pip
+pip install -e "backend[api,audio,ocr,queue,dev]"
 Copy-Item .env.example .env
 ```
 
-Opcional, para transcribir audio en local:
+Si PowerShell bloquea la activación, usa
+`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` o llama
+directamente a `.\.venv\Scripts\python.exe`.
+
+Extras incluidos:
+
+- `api`: FastAPI, SQLAlchemy, PDF y driver de Postgres.
+- `audio`: faster-whisper para transcribir.
+- `ocr`: pytesseract y Pillow.
+- `queue`: Celery y Redis (F5).
+- `dev`: pytest, ruff, mypy y pip-audit.
+
+### 3. Arrancar el backend
+
+En una terminal, desde la raíz del repositorio:
 
 ```powershell
-pip install -e "backend[audio]"
+cd backend
+..\.venv\Scripts\python.exe -m uvicorn app.asgi:app --reload --port 8000
 ```
 
-Opcional, para leer texto en pantalla con OCR (además hace falta el binario de
-Tesseract en el `PATH`):
+Comprobar:
+
+- Salud: <http://127.0.0.1:8000/health>
+- Documentación interactiva: <http://127.0.0.1:8000/docs>
+
+La base de datos SQLite (`backend/data/recetario.db`) se crea sola al arrancar.
+Los trabajos se ejecutan en hilos (`RECETARIO_JOB_RUNNER=thread`), sin Redis.
+
+### 4. Arrancar el frontend
+
+En otra terminal:
 
 ```powershell
-pip install -e "backend[ocr]"
+cd frontend
+npm install
+cmd /c "npm run dev"
+```
 
-# Windows: Tesseract + idioma español
+Abrir <http://localhost:3000>. La URL de la API se configura con
+`NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:8000`); hay una plantilla
+en `frontend/.env.local.example`.
+
+### 5. Probar el flujo
+
+1. `/nueva`: crear una receta sin video.
+2. `/importar`: pegar una URL de TikTok o texto y seguir el estado del trabajo.
+3. `/recetas/[id]`: revisar, aprobar, editar, imprimir y exportar.
+
+### OCR opcional (Windows)
+
+Además del extra `[ocr]`, hace falta el binario de Tesseract y el idioma
+español:
+
+```powershell
 winget install --id UB-Mannheim.TesseractOCR -e
 # Descarga spa.traineddata de tessdata_fast a una carpeta propia y define
 # TESSDATA_PREFIX para no necesitar permisos de administrador:
@@ -100,12 +155,7 @@ python -m app.evals.screen_text --video C:\ruta\video.mp4 --expected fixtures\sc
 El agente imprime su traza en `stderr`: pasos, herramienta, resultado, duración
 y costo. En la API, la misma traza viaja en `JobOut.events`.
 
-### API
-
-```powershell
-cd backend
-..\.venv\Scripts\python.exe -m uvicorn app.asgi:app --reload
-```
+### Endpoints principales
 
 - Documentación interactiva: <http://127.0.0.1:8000/docs>
 - Recetas: `GET/POST /api/v1/recipes` · `GET/PATCH/DELETE /api/v1/recipes/{id}`
@@ -115,21 +165,9 @@ cd backend
   herramienta, entrada, salida, duración, costo y error.
 
 La base de datos es SQLite (`backend/data/recetario.db`) y se crea sola al
-arrancar.
+arrancar. En Docker se usa Postgres.
 
-### Libro (frontend)
-
-```powershell
-cd frontend
-npm install
-cmd /c "npm run dev"
-```
-
-Abrir <http://localhost:3000>. La URL de la API se configura con
-`NEXT_PUBLIC_API_URL` (por defecto `http://127.0.0.1:8000`); hay una plantilla
-en `frontend/.env.local.example`.
-
-Páginas:
+### Páginas del libro
 
 | Ruta | Qué hace |
 | --- | --- |
@@ -152,6 +190,78 @@ cmd /c "npm run e2e"
 los dos flujos de Playwright: alta manual/edición/PDF/búsqueda e ingesta
 simulada con revisión y aprobación. En CI corre con Chromium.
 
+## Arranque con Docker (F5)
+
+La forma reproducible de levantar todo (Postgres + pgvector, Redis, API, worker
+de Celery y frontend) es Docker Compose.
+
+### 1. Requisitos
+
+- Docker Desktop con el motor Linux en marcha.
+- Un proveedor LLM con llave. La imagen **no** incluye OpenCode, así que dentro
+  de Docker se usa el adaptador compatible con OpenAI.
+
+### 2. Configuración (una sola vez)
+
+```powershell
+Copy-Item .env.example .env
+# Edita .env y define, como mínimo:
+#   RECETARIO_LLM_PROVIDER=openai
+#   RECETARIO_LLM_API_KEY=sk-...
+#   RECETARIO_LLM_MODEL=gpt-4o-mini
+```
+
+Compose lee `.env` si existe (`required: false`), así que sin llave la API y el
+libro arrancan igual: solo la extracción desde URL quedará sin LLM.
+
+### 3. Levantar
+
+```powershell
+docker compose up --build -d
+docker compose ps
+```
+
+| Servicio | URL / comprobación |
+| --- | --- |
+| Libro | <http://localhost:3000> |
+| API | <http://localhost:8000> |
+| Salud | <http://localhost:8000/health> |
+| OpenAPI | <http://localhost:8000/docs> |
+| Postgres | `localhost:5432` (usuario `recetario`) |
+| Redis | `localhost:6379` |
+
+El primer arranque tarda: construye las imágenes (ffmpeg, Tesseract, `spa`,
+faster-whisper) y descarga el modelo de transcripción la primera vez que se
+procesa un video.
+
+### 4. Comprobar el worker y los datos
+
+```powershell
+docker compose logs -f worker
+docker compose exec db psql -U recetario -d recetario -c "\dt"
+```
+
+Los trabajos se encolan en Redis (`RECETARIO_JOB_RUNNER=celery`) y el worker
+ejecuta el mismo `process_job` que en local. Los reintentos automáticos solo
+aplican a errores transitorios (`descarga_bloqueada`, `error_interno`), con
+espera exponencial 5 s → 10 s → 20 s y tope de 3 intentos.
+
+### 5. Detener
+
+```powershell
+docker compose down          # conserva los volúmenes
+docker compose down -v       # borra Postgres, Redis y la caché de Whisper
+```
+
+### Diferencias con el arranque local
+
+| Aspecto | Local | Docker |
+| --- | --- | --- |
+| Base de datos | SQLite (`backend/data/recetario.db`) | Postgres 16 + pgvector |
+| Cola | Hilos (`thread`) | Celery + Redis |
+| LLM | OpenCode local o API | API compatible con OpenAI |
+| OCR | Tesseract del sistema | Tesseract dentro de la imagen |
+
 ## Arquitectura
 
 ```
@@ -161,7 +271,7 @@ backend/app/
 ├── adapters/      yt-dlp, faster-whisper, OpenCode, OpenAI, manual, OCR, visión
 ├── pipeline/      orquestación, validación con reintentos y agente
 ├── db/            modelos SQLAlchemy y repositorio
-├── jobs/          servicio de trabajos, etapas, traza y runner en hilos
+├── jobs/          trabajos, etapas, traza, runner en hilos y Celery
 ├── api/           routers y esquemas HTTP
 ├── evals/         comparación de lectores de texto en pantalla
 └── cli.py         interfaz de línea de comandos

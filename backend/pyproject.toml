@@ -29,7 +29,10 @@ api = [
     "sqlalchemy>=2.0",
     "alembic>=1.13",
     "fpdf2>=2.7",
+    "psycopg[binary]>=3.2",
 ]
+# F5: cola de trabajos con Celery + Redis.
+queue = ["celery[redis]>=5.4", "redis>=5.0"]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
@@ -37,6 +40,7 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "respx>=0.21",
+    "pip-audit>=2.7",
 ]
 
 [project.scripts]
@@ -68,7 +72,7 @@ ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["yt_dlp.*", "faster_whisper.*"]
+module = ["yt_dlp.*", "faster_whisper.*", "celery.*", "redis.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]

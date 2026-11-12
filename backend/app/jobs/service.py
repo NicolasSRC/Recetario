@@ -14,10 +14,10 @@ import time
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic import ValidationError
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.adapters.manual import build_metadata, parse_screen_text, parse_transcript
@@ -74,6 +74,16 @@ class JobCancelled(RuntimeError):
     """El usuario canceló el trabajo mientras se procesaba."""
 
 
+# Errores que merecen otro intento automático: la red y los fallos internos
+# suelen ser transitorios. Los datos inválidos o la cuota no se reintentan solos.
+RETRYABLE_ERROR_CODES = frozenset(
+    {
+        JobErrorCode.DESCARGA_BLOQUEADA,
+        JobErrorCode.ERROR_INTERNO,
+    }
+)
+
+
 def classify_error(exc: BaseException) -> JobErrorCode:
     """Traduce la excepción del pipeline a un código estable para la UI."""
     if isinstance(exc, ExtractionFailed) and exc.last_error is not None:
@@ -123,6 +133,40 @@ def _load(session_factory: SessionFactory, job_id: str) -> tuple[str, str | None
         return job.kind, job.source_url, dict(job.payload or {})
 
 
+def _claim(session_factory: SessionFactory, job_id: str) -> bool:
+    """Marca el trabajo como `procesando` de forma atómica.
+
+    Es la pieza de idempotencia de F5: si dos workers reciben el mismo trabajo
+    (reentrega de Redis, reintento o doble submit), solo uno gana el UPDATE.
+    """
+    with session_factory() as session:
+        result = session.execute(
+            update(JobRow)
+            .where(JobRow.id == job_id, JobRow.status == JobStatus.EN_COLA.value)
+            .values(
+                status=JobStatus.PROCESANDO.value,
+                stage=None,
+                error_code=None,
+                error_message=None,
+            )
+        )
+        session.commit()
+        return cast(Any, result).rowcount == 1
+
+
+def _requeue(session_factory: SessionFactory, job_id: str, code: JobErrorCode) -> None:
+    """Devuelve el trabajo a la cola para un reintento automático (RP-01)."""
+    with session_factory() as session:
+        job = session.get(JobRow, job_id)
+        if job is None or job.status == JobStatus.CANCELADA.value:
+            return
+        job.status = JobStatus.EN_COLA.value
+        job.stage = None
+        job.error_code = code.value
+        job.error_message = "reintento automático programado"
+        session.commit()
+
+
 def _set_stage(session_factory: SessionFactory, job_id: str, stage: JobStage) -> None:
     """Cambia la etapa; si el trabajo fue cancelado, corta el procesamiento."""
     with session_factory() as session:
@@ -164,8 +208,9 @@ def _fail(
     *,
     duration_s: float,
     cost_usd: float = 0.0,
+    code: JobErrorCode | None = None,
 ) -> None:
-    code = classify_error(exc)
+    code = code or classify_error(exc)
     with session_factory() as session:
         job = session.get(JobRow, job_id)
         if job is None or job.status == JobStatus.CANCELADA:
@@ -315,10 +360,19 @@ async def process_job(
     session_factory: SessionFactory,
     settings: Settings,
     llm_factory: LLMFactory = build_llm,
-) -> None:
-    """Ejecuta un trabajo de principio a fin. Nunca propaga errores del pipeline."""
+) -> JobErrorCode | None:
+    """Ejecuta un trabajo de principio a fin.
+
+    Devuelve el código de error si falló (para que la cola decida si reintenta)
+    y `None` si terminó bien, se canceló o ya lo había tomado otro worker.
+    Nunca propaga errores del pipeline.
+    """
     started = time.monotonic()
     trace: AgentTrace | None = None
+
+    if not _claim(session_factory, job_id):
+        logger.info("trabajo %s ya no está en cola; se ignora", job_id)
+        return None
 
     def save_recipe(recipe: Recipe) -> Recipe:
         _set_stage(session_factory, job_id, JobStage.GUARDANDO)
@@ -378,11 +432,14 @@ async def process_job(
             duration_s=time.monotonic() - started,
             cost_usd=trace.total_cost_usd if trace else 0.0,
         )
+        return None
     except JobCancelled:
         _save_trace(session_factory, job_id, trace)
         _mark_cancelled(session_factory, job_id)
+        return None
     except Exception as exc:  # el pipeline falla de muchas formas posibles
         logger.warning("trabajo %s falló: %s", job_id, exc, exc_info=True)
+        code = classify_error(exc)
         _save_trace(session_factory, job_id, trace)
         _fail(
             session_factory,
@@ -390,4 +447,8 @@ async def process_job(
             exc,
             duration_s=time.monotonic() - started,
             cost_usd=trace.total_cost_usd if trace else 0.0,
+            code=code,
         )
+        # Una configuración incompleta no se arregla reintentando: se marca el
+        # fallo y se deja que el usuario corrija la llave o el proveedor.
+        return None if isinstance(exc, ConfigError) else code
