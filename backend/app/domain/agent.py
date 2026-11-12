@@ -15,19 +15,59 @@ from app.domain.schemas import Ingredient, Recipe, RecipeDraft
 # --------------------------------------------------------------------------- #
 # RA-01: ¿el caption basta?
 
-_BULLET_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s*")
-_QUANTITY_LINE_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])?\s*\d+(?:[.,/]\d+)?(?:\s+\d+/\d+)?\s+\S")
-_STEP_RE = re.compile(r"(?im)^\s*(?:paso\s*\d+|\d+[.)]\s+)")
+# Los captions de TikTok llegan en una sola línea o con viñetas inline
+# (`• 200 g`, `-4 filetes`). Por eso no se puede depender de saltos de línea.
+_QUANTITY_RE = re.compile(
+    r"(?P<q>[½¼¾]?\d+(?:[.,/]\d+)?(?:\s+\d+/\d+)?)\s*"
+    r"(?:g|gr|grs|kg|ml|l|oz|lb|libras?|tazas?|cucharadas?|cucharaditas?|"
+    r"cdas?|cdtas?|cs|tsp|tbsp|cups?|cloves?|dientes?|pechugas?|filetes?|fillets?)\b",
+    re.IGNORECASE,
+)
+_QUANTITY_ENTRY_RE = re.compile(
+    r"(?:(?:^|[\n\t])\s*[-*•]?\s*|(?<=\s)[-*•]\s*)"
+    r"(?P<q>[½¼¾]?\d+(?:[.,/]\d+)?(?:\s+\d+/\d+)?)"
+    r"(?!\s*[.)])(?=\s+[^\s\d])",
+    re.MULTILINE,
+)
+_STEP_MARKER_RE = re.compile(r"(?:^|\s)(?:paso\s*\d+|\d{1,2}\s*[.)]\s+)", re.IGNORECASE)
+_COOKING_VERB_RE = re.compile(
+    r"\b(?:mezcl\w*|cocin\w*|sofr\w*|a[ñn]ad\w*|agreg\w*|horne\w*|s[íi]rv\w*|"
+    r"serv\w*|sazon\w*|salpiment\w*|marin\w*|calent\w*|bat\w*|remov\w*|"
+    r"retir\w*|reserv\w*|herv\w*|fre[ií]\w*|salte\w*|derret\w*|dej\w*|llev\w*|"
+    r"cort\w*|pel\w*|coloc\w*|termin\w*|integr\w*|espes\w*|incorpor\w*|"
+    r"disuelt\w*|viert\w*|unt\w*|rellen\w*|"
+    r"heat\w*|cook\w*|stir\w*|add\w*|mix\w*|bake\w*|fry\w*|saut\w*|"
+    r"boil\w*|simmer\w*|season\w*|combin\w*|toss\w*|garnish\w*|pour\w*|"
+    r"whisk\w*|preheat\w*|bring\w*|rub\w*|sear\w*|remov\w*|reduc\w*|"
+    r"tast\w*|adjust\w*|drain\w*|coat\w*|assembl\w*|finish\w*)\b",
+    re.IGNORECASE,
+)
 
 _TO_TASTE = ("al gusto", "a gusto", "c/n", "cuanto baste", "opcional", "para servir")
 
 
-def _quantity_lines(text: str) -> int:
-    return sum(1 for line in text.splitlines() if _QUANTITY_LINE_RE.match(line))
+def _quantity_count(text: str) -> int:
+    """Cantidades con unidad o entradas de ingrediente con viñeta.
+
+    Se deduplica por la posición del número para no contar dos veces
+    `- 2 pechugas` (viñeta y unidad).
+    """
+    positions = {match.start("q") for match in _QUANTITY_RE.finditer(text)}
+    positions.update(match.start("q") for match in _QUANTITY_ENTRY_RE.finditer(text))
+    return len(positions)
+
+
+def _step_count(text: str) -> int:
+    """Pasos numerados o, si no hay numeración, verbos de cocina distintos."""
+    numbered = len(_STEP_MARKER_RE.findall(text))
+    if numbered >= 2:
+        return numbered
+    verbs = {match.group(0).casefold() for match in _COOKING_VERB_RE.finditer(text)}
+    return max(numbered, len(verbs))
 
 
 def caption_is_complete(caption: str) -> bool:
-    """RA-01: hay al menos dos ingredientes con cantidad y dos pasos marcados.
+    """RA-01: hay al menos dos ingredientes con cantidad y dos pasos.
 
     La heurística es deliberadamente conservadora: si duda, el agente
     transcribe el audio. Un falso negativo cuesta una transcripción local; un
@@ -35,7 +75,7 @@ def caption_is_complete(caption: str) -> bool:
     """
     if not caption.strip():
         return False
-    return _quantity_lines(caption) >= 2 and len(_STEP_RE.findall(caption)) >= 2
+    return _quantity_count(caption) >= 2 and _step_count(caption) >= 2
 
 
 # --------------------------------------------------------------------------- #

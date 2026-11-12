@@ -244,3 +244,27 @@ def test_heuristica_del_caption() -> None:
     assert caption_is_complete(CAPTION_COMPLETO) is True
     assert caption_is_complete("Pollo al limón en 25 minutos") is False
     assert caption_is_complete("Ingredientes: 2 pechugas, 1 limón") is False
+
+
+def test_heuristica_acepta_captions_en_prosa_con_vinetas_inline() -> None:
+    # Estilo real de TikTok: una sola línea, viñetas y pasos numerados.
+    numerado = (
+        "Ingredientes: 6 cdas. mantequilla 3 dientes de ajo 1 cdta. mostaza "
+        "Preparación: 1. Derrite la mantequilla. 2. Agrega el ajo y mezcla."
+    )
+    assert caption_is_complete(numerado) is True
+
+    con_verbos = (
+        "PECHUGAS JUGOSAS • INGREDIENTES: 3 pechugas de pollo 3 dientes de ajo "
+        "1 cs. mantequilla 30 grs. miel • Haz unos cortes, salpimenta y lleva a "
+        "la sartén. Añade la miel y cocina dos minutos."
+    )
+    assert caption_is_complete(con_verbos) is True
+
+
+def test_heuristica_rechaza_solo_ingredientes_o_solo_pasos() -> None:
+    solo_ingredientes = "POLLO CREMOSO -4 filetes de pechuga -1 taza de crema -2 dientes de ajo"
+    assert caption_is_complete(solo_ingredientes) is False
+
+    solo_pasos = "1. Pela las papas y córtalas. 2. Cocina la carne. 3. Añade el queso."
+    assert caption_is_complete(solo_pasos) is False

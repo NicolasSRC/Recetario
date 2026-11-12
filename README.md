@@ -3,10 +3,10 @@
 Convierte un enlace de TikTok de cocina en una receta estructurada, validada y
 guardada en un recetario propio que se puede buscar, editar y exportar.
 
-> **Estado:** F2 y F3 completadas; F4 implementada y pendiente de validación con
-> videos reales. El pipeline, la API, el libro y el agente funcionan, pero la
-> cuota del modelo gratuito y la falta de videos anotados impiden cerrar la
-> medición.
+> **Estado:** F2 y F3 completadas; F4 implementada y verificada de punta a punta
+> con 15 videos reales (metadatos, audio, frames y OCR). Falta la extracción con
+> LLM real por cuota del modelo gratuito y la medición OCR vs visión, porque el
+> lote disponible es de recetas habladas y casi no trae texto en pantalla.
 > Ver [`docs/FASES.md`](docs/FASES.md).
 
 ## Qué resuelve
@@ -62,10 +62,15 @@ pip install -e "backend[ocr]"
 # Windows: Tesseract + idioma español
 winget install --id UB-Mannheim.TesseractOCR -e
 # Descarga spa.traineddata de tessdata_fast a una carpeta propia y define
-# TESSDATA_PREFIX para no necesitar permisos de administrador.
+# TESSDATA_PREFIX para no necesitar permisos de administrador:
+#   [Environment]::SetEnvironmentVariable(
+#     "TESSDATA_PREFIX", "$env:LOCALAPPDATA\Tesseract-OCR\tessdata", "User")
 ```
 
 En Linux: `sudo apt install tesseract-ocr tesseract-ocr-spa`.
+
+El lector descarta por defecto palabras con confianza menor a 60 y frames sin
+una palabra fuerte; se ajusta con `RECETARIO_TESSERACT_MIN_CONFIDENCE`.
 
 ### Uso
 
@@ -174,17 +179,27 @@ configuración, no código.
 ## Límites conocidos
 
 - Los modelos gratuitos de OpenCode solo funcionan desde OpenCode y tienen cuota;
-  el adaptador informa `provider.free-limit` con el tiempo de espera.
+  el adaptador informa `provider.free-limit` con el tiempo de espera. Al cierre
+  de esta validación la cuota seguía agotada, así que no se pudo contar 10/15
+  recetas válidas.
 - `yt-dlp` puede romperse cuando TikTok cambia su sitio; por eso existe la
   entrada manual y las fixtures para pruebas.
 - El OCR necesita el binario de Tesseract y el extra `[ocr]`. En este equipo
   están instalados (Tesseract 5.4 + `spa`) y la ruta está verificada con un
-  video sintético; si falta el binario, el agente registra la llamada como
-  fallida y sigue con las demás fuentes.
-- La comparación OCR vs visión aún no se ha medido con videos reales: falta
-  configurar una llave de visión y contar con los videos anotados.
-- La transcripción con `small` sobre audio sintético dio resultados pobres
-  (detectó inglés); con voz real habrá que revisar el idioma y el modelo.
+  video sintético (F1 = 1.0) y con frames reales. Si falta el binario, el agente
+  registra la llamada como fallida y sigue con las demás fuentes.
+- **Texto en pantalla real:** de los 15 videos de prueba, ninguno muestra
+  ingredientes con cantidad en pantalla; el OCR solo recupera títulos
+  (`ARROZ`, `Papas rellenas`, `Sopa de papa CREMOSA`) y algún logotipo. Por eso
+  la mejora de F4 frente a F1 aún no es medible con ese lote.
+- **Audio real:** 12/15 videos tienen voz transcribible. Los videos 02, 03 y 10
+  no tienen voz reconocible (audio musical) y terminan en
+  `transcripcion_vacia`; necesitan caption manual u otra fuente.
+- La comparación OCR vs visión sigue pendiente: falta configurar una llave de
+  visión y un lote con texto de receta visible y anotado.
+- La transcripción con `small` funcionó bien con voz real en español (video 01:
+  1742 caracteres, 48,7 s); los videos en inglés pueden requerir `language=en`
+  o un modelo mayor.
 - El recetario es de uso personal y un solo usuario.
 - No se guardan ni se republican los videos.
 

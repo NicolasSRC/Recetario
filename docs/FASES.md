@@ -18,10 +18,10 @@
 
 | Fase | Alcance | Estado | Criterio de aceptación | Verificación |
 | --- | --- | --- | --- | --- |
-| **F1** | MVP sin interfaz: URL/texto → receta JSON validada por CLI | 🟡 **En curso** | 10 de 15 videos producen JSON válido | Código y pruebas listos; falta ejecutar con LLM real y 15 videos |
+| **F1** | MVP sin interfaz: URL/texto → receta JSON validada por CLI | 🟡 **En curso** | 10 de 15 videos producen JSON válido | Metadatos 15/15, audio y frames reales verificados; falta el LLM real (cuota agotada) |
 | **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 136 tests en verde |
 | **F3** | Frontend: libro, edición, aprobación, exportación | ✅ **Completada** | Flujo e2e completo en CI | E2E de Playwright (2 casos), PDF, CI de backend/frontend/e2e |
-| **F4** | Frames y agente con herramientas | 🟡 **En curso** | Mejora medible frente a F1 en videos con texto en pantalla | Frames, OCR/visión, agente, traza y eval implementados; falta medir con videos reales |
+| **F4** | Frames y agente con herramientas | 🟡 **En curso** | Mejora medible frente a F1 en videos con texto en pantalla | Frames, OCR/visión, agente, traza y eval implementados y probados con 15 videos reales; el lote real casi no trae texto en pantalla, así que la mejora no es medible todavía |
 | **F5** | Cola, reintentos y despliegue | ⬜ Pendiente | `docker compose up` levanta todo y CI en verde | — |
 | **F6** | Evals, búsqueda semántica y MCP | ⬜ Pendiente | Reporte de evals en README, búsqueda por significado, MCP con 3 herramientas | — |
 
@@ -63,9 +63,14 @@ estructurada, validada y trazable — antes de añadir base de datos o interfaz.
 
 | Tarea | Por qué falta | Prioridad |
 | --- | --- | --- |
-| Ejecutar el pipeline con LLM real sobre las fixtures | La cuota gratuita de OpenCode se agotó (`provider.free-limit`, ~3,5 h de espera) | Alta |
-| Reunir y anotar 15 videos de prueba | Es el criterio de aceptación (10/15); el usuario ya los tiene | Alta |
-| Instalar extra `audio` y probar `yt-dlp` + `faster-whisper` reales | La ruta de descarga/transcripción no se ha ejecutado | Media |
+| Ejecutar el pipeline con LLM real sobre las fixtures | La cuota gratuita de OpenCode sigue agotada (`provider.free-limit`) | Alta |
+| Contar 10/15 JSON válidos con los 15 videos reales | Los metadatos (15/15), el audio y los frames ya están verificados; solo falta la extracción con LLM | Alta |
+
+> **Verificado con datos reales (11 nov 2026):** las 15 URLs de TikTok
+> responden con yt-dlp 2026.10.26 (duraciones 14–164 s, captions de 59–1850
+> caracteres), `faster-whisper small` transcribe español real (video 01: 1742
+> caracteres en 48,7 s) y la ruta de frames + OCR funciona de punta a punta.
+> El único bloqueo para cerrar el criterio 10/15 es la cuota del modelo.
 
 ### 2.3 Cómo verificar el estado actual
 
@@ -252,7 +257,7 @@ un agente que decide qué fuentes usar.
 | Contenido | `Frame` y `ScreenTextResult` en `domain/content.py` | ✅ |
 | Puertos | `FrameSampler`, `ScreenTextReader` y `ScreenTextExtractor` | ✅ |
 | Frames | `FFmpegFrameSampler` con intervalo, tope de frames y error claro si falta ffmpeg | ✅ |
-| OCR | `TesseractScreenTextReader` con umbral de confianza y aviso si falta el binario | ✅ |
+| OCR | `TesseractScreenTextReader` con umbral de confianza, filtro de tokens y descarte de frames sin palabra fuerte | ✅ |
 | Visión | `VisionScreenTextReader` sobre API compatible con OpenAI, con prompt anti-inyección | ✅ |
 | Selección | `vision_factory.py`: `RECETARIO_SCREEN_TEXT_READER=tesseract\|vision\|none` | ✅ |
 | Agente | `RecipeAgent` determinista: RA-01, RA-02, RA-03, RA-04 y RA-05; herramientas inyectables | ✅ |
@@ -262,14 +267,16 @@ un agente que decide qué fuentes usar.
 | Eval | `python -m app.evals.screen_text`: F1 por palabras para comparar OCR y visión sobre los mismos frames | ✅ |
 | Frontend | Etapa «Leer el texto en pantalla» y panel «Qué hizo el agente» con duración, errores y costo | ✅ |
 | Verificación OCR | Tesseract 5.4 + `spa` instalados; video sintético de 3 frames leído completo y F1 = 1.0 en la eval | ✅ |
+| Validación real | 15/15 metadatos, 12/15 con audio o caption utilizable, OCR limpio sobre frames reales (ver 5.4) | ✅ |
 | Pruebas | Agente (RA-01/02/03/04/05), frames, OCR, visión, traza en la API y métrica de la eval | ✅ |
 
 ### 5.2 Pendiente para cerrar F4
 
 | Tarea | Por qué falta | Prioridad |
 | --- | --- | --- |
-| Medir OCR vs visión con videos reales | Falta la llave de visión y los videos anotados; el OCR ya está instalado y verificado | Alta |
-| Ejecutar la ruta completa con TikTok real | La cuota del LLM gratuito está agotada y aún no hay URLs/videos en el repo | Alta |
+| Medir OCR vs visión con videos reales | Falta la llave de visión y videos anotados; el lote real casi no tiene texto de receta en pantalla | Alta |
+| Conseguir videos con ingredientes/cantidades visibles | Es el caso de uso que justifica los frames; el lote actual es de voz en off | Alta |
+| Decidir qué hacer con los videos 02, 03 y 10 | Su transcripción quedó vacía (audio musical o sin voz) | Media |
 
 ### 5.3 Cómo probarla
 
@@ -290,6 +297,55 @@ Variables nuevas en `.env.example`: `RECETARIO_FRAMES_ENABLED`,
 `RECETARIO_SCREEN_TEXT_READER`, `RECETARIO_TESSERACT_*`,
 `RECETARIO_VISION_*`, `RECETARIO_MAX_AGENT_STEPS` y
 `RECETARIO_LLM_COST_USD_PER_EXTRACTION`.
+
+### 5.4 Validación con los 15 videos reales (11 nov 2026)
+
+Lote completo ejecutado con los adaptadores reales (yt-dlp, faster-whisper
+`small`, ffmpeg y Tesseract `spa+eng`, intervalo 2 s):
+
+| # | Caption RA-01 | Audio (caracteres) | Texto en pantalla detectado |
+| --- | --- | --- | --- |
+| 01 | incompleto | 1742 | `MES` |
+| 02 | incompleto | **vacío** | no ejecutado (falló antes) |
+| 03 | incompleto | **vacío** | no ejecutado (falló antes) |
+| 04 | incompleto | 1489 | ruido (`2 2`, `eee 4`) |
+| 05 | **completo** | omitido por RA-01 | `CapCut` |
+| 06 | incompleto | 1240 | títulos de platos |
+| 07 | **completo** | omitido por RA-01 | frases en inglés |
+| 08 | incompleto | 54 | — |
+| 09 | incompleto | 230 | — |
+| 10 | incompleto | **vacío** | no ejecutado (falló antes) |
+| 11 | **completo** | omitido por RA-01 | ruido (`7 4`) |
+| 12 | incompleto | 1411 | `Cúrcuma.` |
+| 13 | incompleto | 244 | `Papas rellenas` |
+| 14 | incompleto | 3 | — |
+| 15 | incompleto | 1915 | — |
+
+**Resultados:**
+
+- **Metadatos: 15/15.** yt-dlp resuelve todos los enlaces cortos (14–164 s,
+  captions de 59–1850 caracteres).
+- **RA-01: 3/15 captions completos** (05, 07, 11). La heurística se ajustó con
+  estos datos para aceptar captions en prosa con viñetas inline y rechazar los
+  que solo traen ingredientes o solo pasos.
+- **Audio: 12/15 con transcripción.** 01, 04, 06, 12 y 15 superan los 1200
+  caracteres; 08 (54) y 14 (3) son marginales. Los videos 02, 03 y 10 no
+  tienen voz reconocible (audio musical), así que el pipeline los marca con
+  `transcripcion_vacia`.
+- **OCR: limpio pero poco útil.** Tras subir el umbral a 60, exigir una palabra
+  fuerte y filtrar tokens de una o dos letras, solo quedan títulos
+  (`ARROZ`, `Papas rellenas`, `Sopa de papa CREMOSA`) y algo de ruido de
+  logotipos. Ningún video del lote muestra ingredientes con cantidad en
+  pantalla, que es el caso que F4 debía cubrir.
+- **Eval sintética: F1 = 1.0** sobre un video de 3 frames con
+  `INGREDIENTES / 200 g de harina / 2 huevos y sal`, lo que demuestra que la
+  cadena frames → OCR → texto funciona cuando hay texto legible.
+
+**Conclusión:** la implementación de F4 está verificada de punta a punta, pero
+el criterio «mejora medible frente a F1» **no se puede demostrar con este
+lote**: son recetas habladas, no recetas escritas en pantalla. Para cerrarlo
+hace falta un lote con texto de ingredientes visible o anotar manualmente los
+frames y comparar OCR contra visión.
 
 ### Criterio de aceptación
 
@@ -388,12 +444,13 @@ tres herramientas.
 
 ## 9. Próximos pasos inmediatos
 
-1. **Cerrar F4**: medir OCR vs visión con los 15 videos reales y la eval
-   `python -m app.evals.screen_text`.
-2. **Validar F1** cuando la cuota del modelo se restablezca: 10/15 JSON válidos
-   con los videos reales.
-3. **Probar la ingesta real** con `yt-dlp` + `faster-whisper` (extra `audio`) y
-   la ruta de frames completa.
+1. **Cerrar F1** cuando la cuota del modelo se restablezca: correr
+   `ingest --url` sobre los 15 videos y contar 10/15 JSON válidos. Metadatos,
+   audio y frames ya están verificados.
+2. **Cerrar F4**: conseguir videos con ingredientes/cantidades visibles o
+   configurar visión, y medir OCR vs visión con `app.evals.screen_text`.
+3. **Resolver los videos 02, 03 y 10**: reintentar con otro modelo de whisper,
+   aceptar caption manual o marcarlos como no-receta.
 4. **Preparar F5**: sustituir `ThreadJobRunner` por Celery/Redis, añadir
    `docker compose` y migrar a Postgres.
 

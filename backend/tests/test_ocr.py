@@ -53,6 +53,37 @@ def test_sin_pytesseract_avisa_de_la_dependencia(
         asyncio.run(reader.read(_frame(tmp_path)))
 
 
+def test_tesseract_descarta_ruido_de_fondo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class NoisyPytesseract(FakePytesseract):
+        @staticmethod
+        def image_to_data(image: object, *, lang: str, output_type: str) -> dict[str, list[str]]:
+            return {
+                "text": ["ARROZ", "DE", "FR", "Ta", "Ca", "2229202", "200", "g", "harina"],
+                "conf": ["95", "95", "95", "95", "95", "95", "95", "95", "95"],
+            }
+
+    monkeypatch.setitem(sys.modules, "pytesseract", NoisyPytesseract)
+    reader = TesseractScreenTextReader()
+
+    text = asyncio.run(reader.read(_frame(tmp_path)))
+
+    assert text == "ARROZ DE 200 g harina"
+
+
+def test_tesseract_descarta_un_digito_aislado(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class DigitPytesseract(FakePytesseract):
+        @staticmethod
+        def image_to_data(image: object, *, lang: str, output_type: str) -> dict[str, list[str]]:
+            return {"text": ["7"], "conf": ["95"]}
+
+    monkeypatch.setitem(sys.modules, "pytesseract", DigitPytesseract)
+    reader = TesseractScreenTextReader()
+
+    assert asyncio.run(reader.read(_frame(tmp_path))) == ""
+
+
 def test_tesseract_sin_binario_avisa(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     class BrokenPytesseract(FakePytesseract):
         @staticmethod

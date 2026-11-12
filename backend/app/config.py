@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     max_frames_per_video: int = 24
     screen_text_reader: Literal["tesseract", "vision", "none"] = "tesseract"
     tesseract_lang: str = "spa+eng"
-    tesseract_min_confidence: int = 40
+    tesseract_min_confidence: int = 60
     vision_model: str = "gpt-4o-mini"
     vision_api_key: SecretStr | None = None
     vision_base_url: str | None = None

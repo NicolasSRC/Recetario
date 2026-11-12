@@ -13,13 +13,54 @@ from pathlib import Path
 from app.config import ConfigError
 from app.domain.content import Frame
 
+# Palabras de enlace que se conservan aunque sean cortas; el resto de tokens de
+# una o dos letras suele ser ruido de texturas y logotipos.
+_STOPWORDS = {
+    "a",
+    "al",
+    "con",
+    "de",
+    "del",
+    "el",
+    "en",
+    "la",
+    "las",
+    "los",
+    "o",
+    "para",
+    "por",
+    "que",
+    "se",
+    "sin",
+    "su",
+    "un",
+    "una",
+    "y",
+}
+_UNITS = {"g", "kg", "l", "ml", "oz", "lb"}
+
+
+def _useful_token(token: str) -> bool:
+    """Descarta ruido del OCR sin perder cantidades ni unidades."""
+    letters = sum(char.isalpha() for char in token)
+    digits = sum(char.isdigit() for char in token)
+    folded = token.casefold()
+
+    if folded in _STOPWORDS or folded in _UNITS:
+        return True
+    if letters >= 3:
+        return True
+    if digits and not letters and digits <= 4:
+        return True
+    return bool(letters and digits and len(token) <= 6)
+
 
 class TesseractScreenTextReader:
     def __init__(
         self,
         *,
         lang: str = "spa+eng",
-        min_confidence: int = 40,
+        min_confidence: int = 60,
     ) -> None:
         self._lang = lang
         self._min_confidence = min_confidence
@@ -58,7 +99,14 @@ class TesseractScreenTextReader:
                 score = float(confidence)
             except (TypeError, ValueError):
                 continue
-            if score >= self._min_confidence:
+            if score >= self._min_confidence and _useful_token(word):
                 words.append(word)
+
+        # Un frame sin una palabra fuerte (o sin al menos dos tokens) suele ser
+        # textura, un logotipo o un número suelto: no aporta texto de receta.
+        strong = any(sum(char.isalpha() for char in word) >= 3 for word in words)
+        distinct = [word for word in words if word.casefold() not in _STOPWORDS]
+        if not strong and len(distinct) < 2:
+            return ""
 
         return " ".join(words)
