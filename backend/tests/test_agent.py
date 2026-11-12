@@ -111,6 +111,33 @@ async def test_ra01_caption_completo_se_salta_audio_y_frames() -> None:
     assert result.trace.steps == 4
 
 
+async def test_sin_voz_continua_con_el_caption() -> None:
+    # Caso real (videos 02, 03 y 10): no hay voz, pero el caption trae datos.
+    llm = ContextLLM(lambda _context: _draft())
+
+    async def get_metadata() -> VideoMetadata:
+        return _metadata("Pechuga de pollo cremosa: 2 pechugas y 1 limón")
+
+    async def transcribe() -> Transcript:
+        raise ValueError("la transcripción quedó vacía (¿el video no tiene voz?)")
+
+    agent = RecipeAgent(
+        AgentTools(get_metadata=get_metadata, transcribe_audio=transcribe),
+        llm,
+    )
+
+    result = await agent.run()
+
+    assert result.recipe.title == "Pollo al limón"
+    assert llm.contexts[0].transcript is None
+    failed = [call for call in result.trace.calls if call.tool == "transcribe_audio"]
+    assert len(failed) == 1
+    assert failed[0].ok is False
+    assert any(
+        call.tool == "decision" and "no aportó texto" in call.output for call in result.trace.calls
+    )
+
+
 async def test_ra02_frames_completan_las_cantidades() -> None:
     calls = {"transcribe": 0, "frames": 0}
     llm = ContextLLM(lambda context: _draft(quantity=None) if not context.screen_text else _draft())

@@ -19,7 +19,7 @@
 | Fase | Alcance | Estado | Criterio de aceptación | Verificación |
 | --- | --- | --- | --- | --- |
 | **F1** | MVP sin interfaz: URL/texto → receta JSON validada por CLI | 🟡 **En curso** | 10 de 15 videos producen JSON válido | Metadatos 15/15, audio y frames reales verificados; falta el LLM real (cuota agotada) |
-| **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 136 tests en verde |
+| **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 141 tests en verde |
 | **F3** | Frontend: libro, edición, aprobación, exportación | ✅ **Completada** | Flujo e2e completo en CI | E2E de Playwright (2 casos), PDF, CI de backend/frontend/e2e |
 | **F4** | Frames y agente con herramientas | 🟡 **En curso** | Mejora medible frente a F1 en videos con texto en pantalla | Frames, OCR/visión, agente, traza y eval implementados y probados con 15 videos reales; el lote real casi no trae texto en pantalla, así que la mejora no es medible todavía |
 | **F5** | Cola, reintentos y despliegue | ⬜ Pendiente | `docker compose up` levanta todo y CI en verde | — |
@@ -56,7 +56,7 @@ estructurada, validada y trazable — antes de añadir base de datos o interfaz.
 | Pipeline | `pipeline/extract_recipe.py`: LLM → ensamblado → validación con reintentos (RF-23) | ✅ |
 | CLI | `recetario parse` y `recetario ingest` (`--url`, archivos, `--dry-run`, `--out`) | ✅ |
 | Fixtures | 4 casos: caption completo, transcripción en inglés, texto en pantalla, no-receta | ✅ |
-| Pruebas | **136 tests** en total (dominio, adaptadores, API, trabajos y agente), cobertura >90 % en dominio | ✅ |
+| Pruebas | **141 tests** en total (dominio, adaptadores, API, trabajos y agente), cobertura >90 % en dominio | ✅ |
 | Calidad | `ruff check`, `ruff format --check` y `mypy` limpios | ✅ |
 
 ### 2.2 Pendiente para cerrar F1
@@ -116,7 +116,7 @@ con base de datos, estados de trabajo e idempotencia.
 | Procesamiento | `ThreadJobRunner` en hilos daemon; sustituible por una cola real en F5 | ✅ |
 | CORS | Orígenes locales configurables (`cors_origins` + `cors_origin_regex`) | ✅ |
 | OpenAPI | Generado automáticamente en `/docs` y `/openapi.json` | ✅ |
-| Pruebas | 136 tests: CRUD, búsqueda, exportación, duplicados, validación, trabajos, agente y clasificación de errores | ✅ |
+| Pruebas | 141 tests: CRUD, búsqueda, exportación, duplicados, validación, trabajos, agente y clasificación de errores | ✅ |
 
 ### 3.2 Pendiente (no bloquea el criterio de aceptación)
 
@@ -276,7 +276,7 @@ un agente que decide qué fuentes usar.
 | --- | --- | --- |
 | Medir OCR vs visión con videos reales | Falta la llave de visión y videos anotados; el lote real casi no tiene texto de receta en pantalla | Alta |
 | Conseguir videos con ingredientes/cantidades visibles | Es el caso de uso que justifica los frames; el lote actual es de voz en off | Alta |
-| Decidir qué hacer con los videos 02, 03 y 10 | Su transcripción quedó vacía (audio musical o sin voz) | Media |
+| Decidir qué hacer con los videos 02, 03 y 10 | **Resuelto:** el agente registra el fallo del audio y continúa con el caption (prueba `test_sin_voz_continua_con_el_caption`) | — |
 
 ### 5.3 Cómo probarla
 
@@ -330,8 +330,10 @@ Lote completo ejecutado con los adaptadores reales (yt-dlp, faster-whisper
   que solo traen ingredientes o solo pasos.
 - **Audio: 12/15 con transcripción.** 01, 04, 06, 12 y 15 superan los 1200
   caracteres; 08 (54) y 14 (3) son marginales. Los videos 02, 03 y 10 no
-  tienen voz reconocible (audio musical), así que el pipeline los marca con
-  `transcripcion_vacia`.
+  tienen voz reconocible (audio musical). En la app esto **no aborta**: el
+  agente registra la llamada fallida y sigue solo con el caption (cubierto por
+  `test_sin_voz_continua_con_el_caption`). El lote de validación los marca como
+  fallo porque el script de sonda llamaba al transcriptor directamente.
 - **OCR: limpio pero poco útil.** Tras subir el umbral a 60, exigir una palabra
   fuerte y filtrar tokens de una o dos letras, solo quedan títulos
   (`ARROZ`, `Papas rellenas`, `Sopa de papa CREMOSA`) y algo de ruido de
@@ -449,8 +451,8 @@ tres herramientas.
    audio y frames ya están verificados.
 2. **Cerrar F4**: conseguir videos con ingredientes/cantidades visibles o
    configurar visión, y medir OCR vs visión con `app.evals.screen_text`.
-3. **Resolver los videos 02, 03 y 10**: reintentar con otro modelo de whisper,
-   aceptar caption manual o marcarlos como no-receta.
+3. **Videos 02, 03 y 10:** el agente ya continúa con el caption cuando no hay
+   voz; si el LLM no alcanza, se marcan como `por_revisar` o no-receta.
 4. **Preparar F5**: sustituir `ThreadJobRunner` por Celery/Redis, añadir
    `docker compose` y migrar a Postgres.
 

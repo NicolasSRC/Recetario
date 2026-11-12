@@ -193,8 +193,9 @@ configuración, no código.
   (`ARROZ`, `Papas rellenas`, `Sopa de papa CREMOSA`) y algún logotipo. Por eso
   la mejora de F4 frente a F1 aún no es medible con ese lote.
 - **Audio real:** 12/15 videos tienen voz transcribible. Los videos 02, 03 y 10
-  no tienen voz reconocible (audio musical) y terminan en
-  `transcripcion_vacia`; necesitan caption manual u otra fuente.
+  no tienen voz reconocible (audio musical); el agente no aborta: registra el
+  fallo y continúa con el caption. Si el caption tampoco alcanza, la receta
+  queda `por_revisar` o se rechaza.
 - La comparación OCR vs visión sigue pendiente: falta configurar una llave de
   visión y un lote con texto de receta visible y anotado.
 - La transcripción con `small` funcionó bien con voz real en español (video 01:
