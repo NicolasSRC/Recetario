@@ -64,7 +64,7 @@ const errorText: Record<string, string> = {
     "Se agotó la cuota del modelo gratuito. Espera un rato, cambia de proveedor o escribe la receta a mano.",
   no_es_receta: "El contenido no parece describir una receta de cocina.",
   error_interno:
-    "Algo falló en el servidor. Revisa la consola del backend para ver el detalle.",
+    "El servidor no pudo completar el trabajo. Revisa el detalle de abajo.",
 };
 
 export default function ImportPage() {
@@ -196,6 +196,8 @@ export default function ImportPage() {
     ? visibleStages.findIndex((stage) => stage.key === job.stage)
     : -1;
   const completed = job?.status === "lista" ? visibleStages.length : currentStage;
+  const missingLlmKey =
+    job?.error_message?.includes("RECETARIO_LLM_API_KEY") ?? false;
 
   return (
     <div className="fade-in space-y-6">
@@ -404,14 +406,28 @@ export default function ImportPage() {
                 <div className="mt-6 space-y-4">
                   <div className="rounded-lg border border-wine/25 bg-wine/5 p-4">
                     <p className="text-sm font-semibold text-wine">
-                      {job.error_code
-                        ? (errorText[job.error_code] ??
-                          "Ocurrió un error inesperado.")
-                        : "Ocurrió un error inesperado."}
+                      {missingLlmKey
+                        ? "Falta configurar el proveedor del LLM."
+                        : job.error_code
+                          ? (errorText[job.error_code] ??
+                            "Ocurrió un error inesperado.")
+                          : "Ocurrió un error inesperado."}
                     </p>
                     {job.error_message ? (
                       <p className="mt-1 break-words text-xs text-ink-soft">
                         {job.error_message}
+                      </p>
+                    ) : null}
+                    {missingLlmKey ? (
+                      <p className="mt-2 text-xs leading-relaxed text-ink-soft">
+                        Añade <code className="font-mono">RECETARIO_LLM_API_KEY</code>{" "}
+                        a tu <code className="font-mono">.env</code> y recrea la API
+                        y el worker con{" "}
+                        <code className="font-mono">
+                          docker compose up -d --force-recreate api worker
+                        </code>
+                        . En local puedes usar OpenCode sin llave. Consulta el
+                        README.
                       </p>
                     ) : null}
                   </div>

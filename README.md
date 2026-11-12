@@ -262,6 +262,32 @@ docker compose down -v       # borra Postgres, Redis y la caché de Whisper
 | LLM | OpenCode local o API | API compatible con OpenAI |
 | OCR | Tesseract del sistema | Tesseract dentro de la imagen |
 
+### Si aparece «falta RECETARIO_LLM_API_KEY»
+
+No es una caída del servidor: el trabajo no tiene proveedor de LLM configurado.
+La imagen Docker no incluye OpenCode, así que Compose usa `openai` por defecto.
+Crea o edita `.env` con:
+
+```dotenv
+RECETARIO_LLM_PROVIDER=openai
+RECETARIO_LLM_API_KEY=sk-...
+RECETARIO_LLM_MODEL=gpt-4o-mini
+```
+
+y recrea la API y el worker:
+
+```powershell
+docker compose up -d --force-recreate api worker
+```
+
+Después pulsa **Reintentar** en `/importar`. Si usas un servidor local compatible
+con OpenAI (Ollama, LM Studio, vLLM), apunta `RECETARIO_LLM_BASE_URL` a su URL y
+usa cualquier valor no vacío como llave.
+
+En local, sin Docker, el proveedor por defecto es OpenCode y no necesita llave.
+Si su cuota gratuita está agotada verás `provider.free-limit`: espera un rato,
+cambia de modelo o configura una API compatible con OpenAI.
+
 ## Arquitectura
 
 ```
