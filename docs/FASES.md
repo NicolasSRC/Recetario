@@ -22,12 +22,11 @@
 | **F2** | Persistencia y API REST | ✅ **Completada** | OpenAPI publicado, integración en verde, reprocesar no duplica | CRUD, exportación, trabajos en segundo plano y 153 tests en verde |
 | **F3** | Frontend: libro, edición, aprobación, exportación | ✅ **Completada** | Flujo e2e completo en CI | E2E de Playwright (2 casos), PDF, CI de backend/frontend/e2e |
 | **F4** | Frames y agente con herramientas | 🟡 **En curso** | Mejora medible frente a F1 en videos con texto en pantalla | Frames, OCR/visión, agente, traza y eval implementados y probados con 15 videos reales; el lote real casi no trae texto en pantalla, así que la mejora no es medible todavía |
-| **F5** | Cola, reintentos y despliegue | 🟡 **Casi cerrada** | `docker compose up` levanta todo y CI en verde | Compose verificado en local (5 servicios, Postgres + pgvector, worker Celery, alta y búsqueda); falta confirmar CI tras el push |
+| **F5** | Cola, reintentos y despliegue | ✅ **Completada** | `docker compose up` levanta todo y CI en verde | Compose verificado en local (5 servicios, Postgres + pgvector, worker Celery, alta y búsqueda) y CI en verde, incluido el build de imágenes |
 | **F6** | Evals, búsqueda semántica y MCP | ⬜ Pendiente | Reporte de evals en README, búsqueda por significado, MCP con 3 herramientas | — |
 
-**Avance global estimado:** F1 completo en código, F2 y F3 cerradas, F4
-implementada y pendiente de validación con videos reales, F5 implementada y
-pendiente de la prueba final con Docker (≈ 75 %).
+**Avance global estimado:** F1 completo en código, F2, F3 y F5 cerradas, F4
+implementada y pendiente de validación con videos reales (≈ 80 %).
 
 ---
 
@@ -362,7 +361,7 @@ Mejora medible frente a F1 en los videos que solo traen texto en pantalla.
 
 ---
 
-## 6. F5 · Cola y despliegue 🟡
+## 6. F5 · Cola y despliegue ✅
 
 **Objetivo:** pasar de un proceso síncrono a un sistema operable y reproducible.
 
@@ -415,6 +414,7 @@ worker.
 | `pip-audit --skip-editable` | ✅ sin vulnerabilidades |
 | `npm audit --audit-level=high` | ✅ 0 altas/críticas (7 moderadas en tooling de ESLint) |
 | E2E de Playwright | ✅ 2 casos en verde |
+| CI de GitHub Actions | ✅ [run 43316984987](https://github.com/NicolasSRC/Recetario/actions/runs/43316984987): backend, frontend, E2E y Docker en verde |
 
 La verificación con Postgres destapó un fallo que SQLite ocultaba: la búsqueda
 usaba `SELECT DISTINCT` sobre una tabla con columnas JSON y Postgres no define
@@ -497,8 +497,8 @@ tres herramientas.
    configurar visión, y medir OCR vs visión con `app.evals.screen_text`.
 3. **Videos 02, 03 y 10:** el agente ya continúa con el caption cuando no hay
    voz; si el LLM no alcanza, se marcan como `por_revisar` o no-receta.
-4. **Cerrar F5**: confirmar `docker compose up --build -d`, `/health`, libro en
-   el puerto 3000 y consumo del worker; después commit y push.
+4. **F5 cerrada:** `docker compose up --build -d` verificado en local y CI en
+   verde. Siguiente hito: F6 (evals, búsqueda semántica y MCP).
 
 ---
 
